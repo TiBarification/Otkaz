@@ -9,6 +9,7 @@ new Handle:Enable;
 new Handle:hRoundUse, iRoundUse;
 new Handle:hColor;
 new Handle:otkaz_timer[MAXPLAYERS+1];
+new Handle:hMenu = INVALID_HANDLE;
 new iRoundUsed[MAXPLAYERS+1];
 
 new const String:Cmds[] = "configs/otkaz_cmds.ini";
@@ -63,6 +64,8 @@ public OnPluginStart()
 		CloseHandle(hFile);
 	}
 	
+	OtkazMenuInitialized();
+	
 	AutoExecConfig(true, "otkaz");
 }
 
@@ -96,7 +99,7 @@ public Action:Reset(client, args)
 			}
 			if(IsPlayerAlive(client))
 			{
-				OtkazMenuInitialized(client);
+				DisplayMenu(hMenu, client, 15);
 			}
 			else
 			{
@@ -111,7 +114,7 @@ public Action:Reset(client, args)
 	return Plugin_Handled;
 }
 
-OtkazMenuInitialized(client)
+OtkazMenuInitialized()
 {
 	new Handle:oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.ini", "r");
 	if (oprfile == INVALID_HANDLE)
@@ -119,17 +122,16 @@ OtkazMenuInitialized(client)
 		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.ini");
 		return;
 	}
-	new Handle:menu = CreateMenu(OtkazMenuHandler);
+	hMenu = CreateMenu(OtkazMenuHandler);
 	decl String:StR[85];
-	SetMenuTitle(menu, "Выберите причину отказа:\n \n");
+	SetMenuTitle(hMenu, "Выберите причину отказа:\n \n");
 	while (ReadFileLine(oprfile, StR, 85))
 	{
-		AddMenuItem(menu, StR, StR);
+		AddMenuItem(hMenu, StR, StR);
 	}
 	CloseHandle(oprfile);
-	DisplayMenu(menu, client, 15);
-	SetMenuExitBackButton(menu, false);
-	SetMenuExitButton(menu, true);
+	SetMenuExitBackButton(hMenu, false);
+	SetMenuExitButton(hMenu, true);
 }
 
 public OtkazMenuHandler(Handle:menu, MenuAction:action, client, iSlot)
@@ -148,7 +150,7 @@ public OtkazMenuHandler(Handle:menu, MenuAction:action, client, iSlot)
 	}
 	else if(action == MenuAction_End)
 	{
-		CloseHandle(menu);
+		//CloseHandle(menu);
 		return;
 	}
 }
