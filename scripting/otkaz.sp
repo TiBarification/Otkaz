@@ -125,7 +125,7 @@ OtkazMenuInitialized()
 	hMenu = CreateMenu(OtkazMenuHandler);
 	decl String:StR[85];
 	SetMenuTitle(hMenu, "Выберите причину отказа:\n \n");
-	while (ReadFileLine(oprfile, StR, 85))
+	while (!IsEndOfFile(oprfile) && ReadFileLine(oprfile, StR, 85))
 	{
 		AddMenuItem(hMenu, StR, StR);
 	}
