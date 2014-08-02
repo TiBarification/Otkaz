@@ -2,15 +2,17 @@
 #include <cstrike>
 #include <sdktools>
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 #define PREFIX "\x04[\x03Отказ\x04]\x03 "
 
 new Handle:Enable;
 new Handle:hRoundUse, iRoundUse;
 new Handle:hColor;
+new Handle:hMenuTime;
 new Handle:otkaz_timer[MAXPLAYERS+1];
 new Handle:hMenu = INVALID_HANDLE;
 new iRoundUsed[MAXPLAYERS+1];
+new iMenuTime;
 
 new const String:Cmds[] = "configs/otkaz_cmds.ini";
 new const String:Reasons[] = "configs/otkaz_reasons.ini";
@@ -30,6 +32,8 @@ public OnPluginStart()
 	Enable = CreateConVar("sm_otkaz_enable", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
 	hColor = CreateConVar("sm_otkaz_player_color", "1", "Красить игрока в синий цвет, когда он пишет отказ?", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
+	hMenuTime = CreateConVar("sm_otkaz_menu_time", "20", "Сколько секунд активно меню игрока.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
+	iMenuTime = GetConVarInt(hMenuTime);
 	iRoundUse = GetConVarInt(hRoundUse);
 	HookConVarChange(hRoundUse, OnConVarChange);
 	
@@ -72,6 +76,7 @@ public OnPluginStart()
 public OnConVarChange(Handle:convar, const String:oldValue[], const String:newValue[])
 {
 	iRoundUse = StringToInt(newValue);
+	iMenuTime = StringToInt(newValue);
 }
 
 public OnRoundStart(Handle:event, const String:name[], bool:donBroadcast)
@@ -99,7 +104,14 @@ public Action:Reset(client, args)
 			}
 			if(IsPlayerAlive(client))
 			{
-				DisplayMenu(hMenu, client, 15);
+				if (iMenuTime == 0)
+				{
+					DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
+				}
+				else
+				{
+					DisplayMenu(hMenu, client, iMenuTime);
+				}
 			}
 			else
 			{
