@@ -27,7 +27,7 @@ public Plugin:myinfo =
 public OnPluginStart()
 {
 	CreateConVar("sm_otkaz_version", VERSION, _, FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_SPONLY);
-	Enable = CreateConVar("sm_otkaz_enable", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
+	Enable = CreateConVar("sm_otkaz_enable", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
 	hColor = CreateConVar("sm_otkaz_player_color", "1", "Красить игрока в синий цвет, когда он пишет отказ?", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	iRoundUse = GetConVarInt(hRoundUse);
