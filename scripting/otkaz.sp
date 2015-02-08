@@ -64,7 +64,6 @@ public OnPluginStart()
 				RegConsoleCmd(sBuffer, Reset);
 			}
 		}
-		//SetFailState("Не удалось открыть файл %s", sBuffer);
 		CloseHandle(hFile);
 	}
 	
@@ -153,16 +152,15 @@ public OtkazMenuHandler(Handle:menu, MenuAction:action, client, iSlot)
 		iRoundUsed[client]++;
 		if(GetConVarBool(hColor))
 		{
-			SetEntityRenderColor(client, 0, 0, 255, 255);
-			otkaz_timer[client] = CreateTimer(1.5, TimedColoring, client);
+			SetEntityRenderColor(client, 30, 20, 40, 255);
+			otkaz_timer[client] = CreateTimer(5.0, TimedColoring, client);
 		}
 		decl String:Reason[85];
 		GetMenuItem(menu, iSlot, Reason, 85);
-		PrintToChatAll("%s\x07FF0000%N\x03 написал отказ. Причина: \x070000FF%s", PREFIX, client, Reason);
+		PrintToChatAll("%s\x04%N\x03 написал отказ. Причина: \x04%s", PREFIX, client, Reason);
 	}
 	else if(action == MenuAction_End)
 	{
-		//CloseHandle(menu);
 		return;
 	}
 }
