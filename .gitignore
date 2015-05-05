@@ -38,3 +38,5 @@ Icon
 # SourcePawn Compiled Files
 # .smx files
 .smx
+
+*.smx
