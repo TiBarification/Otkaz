@@ -5,7 +5,7 @@
 
 #pragma semicolon 1
 //Force 1.7 syntax
-//#pragma newdecls required
+#pragma newdecls required
 
 #define PLUGIN_VERSION "1.3"
 #define PREFIX "\x04[\x03Отказ\x04]\x03 "
@@ -16,7 +16,7 @@ ConVar g_hColor;
 ConVar g_hMenuTime;
 
 Handle g_hOtkaz_Timer[MAXPLAYERS+1];
-Handle g_hMenu = null;
+Menu g_hMenu = null;
 
 bool g_bEnabled;
 
@@ -25,8 +25,7 @@ int g_iRoundUsed[MAXPLAYERS+1];
 int g_iColor;
 int g_iMenuTime;
 
-char Cmds[] = "configs/otkaz_cmds.ini";
-char Reasons[] = "configs/otkaz_reasons.ini";
+char Reasons[26] = "configs/otkaz_reasons.ini";
 
 public Plugin myinfo =
 {
@@ -55,33 +54,9 @@ public void OnPluginStart()
 	
 	g_bEnabled = true;
 	
-	char sBuffer[PLATFORM_MAX_PATH];
-	char sBuffer2[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), Cmds);
-	BuildPath(Path_SM, sBuffer2, sizeof(sBuffer2), Reasons);
-	if(!FileExists(sBuffer))
-	{
-		SetFailState("Не найден файл %s", sBuffer);
-	}
-	else if(!FileExists(sBuffer2))
-	{
-		SetFailState("Не найден файл %s", sBuffer2);
-	}
-	Handle hFile = OpenFile(sBuffer, "r");
+	RegConsoleCmd("sm_otkaz", Otkaz_Command, "Вызов отказа");
 	
-	if(hFile != null)
-	{
-		while (!IsEndOfFile(hFile) && ReadFileLine(hFile, sBuffer, sizeof(sBuffer)))
-		{
-			TrimString(sBuffer);
-			
-			if (sBuffer[0])
-			{
-				RegConsoleCmd(sBuffer, Reset);
-			}
-		}
-		CloseHandle(hFile);
-	}
+	CreateCustomCfg(Reasons);
 	
 	OtkazMenuInitialized();
 }
@@ -122,7 +97,7 @@ public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
 	}
 }
 
-public Action Reset(int client, int args)
+public Action Otkaz_Command(int client, int args)
 {
 	if(!g_bEnabled)
 		return Plugin_Stop;
@@ -134,17 +109,16 @@ public Action Reset(int client, int args)
 			if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
 			{
 				PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, g_iRoundUse);
-				//return Plugin_Handled;
 			}
 			if(IsPlayerAlive(client))
 			{
 				if (!g_iMenuTime)
 				{
-					DisplayMenu(g_hMenu, client, MENU_TIME_FOREVER);
+					g_hMenu.Display(client, MENU_TIME_FOREVER);
 				}
 				else
 				{
-					DisplayMenu(g_hMenu, client, g_iMenuTime);
+					g_hMenu.Display(client, g_iMenuTime);
 				}
 			}
 			else
@@ -168,19 +142,18 @@ void OtkazMenuInitialized()
 		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.ini");
 		return;
 	}
-	g_hMenu = CreateMenu(OtkazMenuHandler);
+	g_hMenu = new Menu(OtkazMenuHandler);
 	char StR[85];
 	SetMenuTitle(g_hMenu, "Выберите причину отказа:\n \n");
 	while (!IsEndOfFile(oprfile) && ReadFileLine(oprfile, StR, sizeof(StR)))
 	{
-		AddMenuItem(g_hMenu, StR, StR);
+		g_hMenu.AddItem(StR, StR);
 	}
 	CloseHandle(oprfile);
-	SetMenuExitBackButton(g_hMenu, false);
-	SetMenuExitButton(g_hMenu, true);
+	g_hMenu.ExitButton = true;
 }
 
-public OtkazMenuHandler(Handle menu, MenuAction action, int client, int iSlot)
+public int OtkazMenuHandler(Handle menu, MenuAction action, int client, int iSlot)
 {
 	if (action == MenuAction_Select)
 	{
@@ -213,4 +186,14 @@ public Action TimedColoring(Handle timer, any client)
 {
 	SetEntityRenderColor(client, 255, 255, 255, 255);
 	g_hOtkaz_Timer[client] = null;
+}
+
+stock void CreateCustomCfg(const char[] Path)
+{
+	char sBuffer[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), Path);
+	if(!FileExists(sBuffer))
+	{
+		SetFailState("Не найден файл %s", sBuffer);
+	}
 }
