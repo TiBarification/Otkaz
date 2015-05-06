@@ -14,6 +14,7 @@ ConVar g_hEnabled;
 ConVar g_hRoundUse;
 ConVar g_hColor;
 ConVar g_hMenuTime;
+ConVar g_hChatCommands;
 
 Handle g_hOtkaz_Timer[MAXPLAYERS+1];
 Menu g_hMenu = null;
@@ -24,8 +25,10 @@ int g_iRoundUse;
 int g_iRoundUsed[MAXPLAYERS+1];
 int g_iColor;
 int g_iMenuTime;
+int g_iNumCmds;
 
 char Reasons[26] = "configs/otkaz_reasons.ini";
+char g_cChatCmds[16][32];
 
 public Plugin myinfo =
 {
@@ -43,18 +46,18 @@ public void OnPluginStart()
 	g_hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
 	g_hColor = CreateConVar("sm_otkaz_player_color", "1", "Красить игрока в синий цвет, когда он пишет отказ?", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	g_hMenuTime = CreateConVar("sm_otkaz_menu_time", "20", "Сколько секунд активно меню игрока.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
+	g_hChatCommands = CreateConVar("sm_otkaz_cmds", "!otkaz,!отказ,отказ", "Команды вызова меню отказа(каждая команда после запятой)", FCVAR_NONE);
 	//Needed to add HOOKS after this -^
 	
 	g_hEnabled.AddChangeHook(OnCvarChange);
 	g_hRoundUse.AddChangeHook(OnCvarChange);
 	g_hColor.AddChangeHook(OnCvarChange);
 	g_hMenuTime.AddChangeHook(OnCvarChange);
+	g_hChatCommands.AddChangeHook(OnCvarChange);
 	
 	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	
 	g_bEnabled = true;
-	
-	RegConsoleCmd("sm_otkaz", Otkaz_Command, "Вызов отказа");
 	
 	CreateCustomCfg(Reasons);
 	
@@ -63,10 +66,13 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
+	char cBuffer[512];
 	g_bEnabled = g_hEnabled.BoolValue;
 	g_iMenuTime = g_hMenuTime.IntValue;
 	g_iRoundUse = g_hRoundUse.IntValue;
 	g_iColor = g_hColor.IntValue;
+	GetConVarString(g_hChatCommands, cBuffer, sizeof(cBuffer));
+	g_iNumCmds = ExplodeString(cBuffer, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
 public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sNewValue)
@@ -85,6 +91,8 @@ public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sN
 		g_iColor = StringToInt(sNewValue);
 	else if (StrEqual("sm_otkaz_menu_time", sConVarName))
 		g_iMenuTime = StringToInt(sNewValue);
+	else if (StrEqual("sm_otkaz_cmds", sConVarName))
+		g_iNumCmds = ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
 public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
@@ -97,41 +105,53 @@ public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
 	}
 }
 
-public Action Otkaz_Command(int client, int args)
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
 	if(!g_bEnabled)
 		return Plugin_Stop;
 	
 	if(client && IsClientInGame(client))
-	{
-		if(GetClientTeam(client) == 2)
+	{	
+		for (int i = 0; i < g_iNumCmds; i++)
 		{
-			if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
+			if (StrEqual(command, g_cChatCmds[i], false))
 			{
-				PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, g_iRoundUse);
-			}
-			if(IsPlayerAlive(client))
-			{
-				if (!g_iMenuTime)
+				if(GetClientTeam(client) == 2)
 				{
-					g_hMenu.Display(client, MENU_TIME_FOREVER);
+					if(IsPlayerAlive(client))
+					{
+						if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
+						{
+							PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, g_iRoundUse);
+							return Plugin_Stop;
+						}
+						else if (!g_iMenuTime)
+						{
+							g_hMenu.Display(client, MENU_TIME_FOREVER);
+							return Plugin_Stop;
+						}
+						else
+						{
+							g_hMenu.Display(client, g_iMenuTime);
+							return Plugin_Stop;
+						}
+					}
+					else
+					{
+						PrintToChat(client, "%sВы должны быть живы.", PREFIX);
+						return Plugin_Stop;
+					}
 				}
 				else
 				{
-					g_hMenu.Display(client, g_iMenuTime);
+					PrintToChat(client, "%sВы должны быть заключенным.", PREFIX);
+					return Plugin_Stop;
 				}
 			}
-			else
-			{
-				PrintToChat(client, "%sВы должны быть живы.", PREFIX);
-			}
-		}
-		else
-		{
-			PrintToChat(client, "%sВы должны быть заключенным.", PREFIX);
 		}
 	}
-	return Plugin_Handled;
+	
+	return Plugin_Continue;
 }
 
 void OtkazMenuInitialized()
