@@ -7,8 +7,8 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3"
-#define PREFIX "\x04[\x03Отказ\x04]\x03 "
+#define PLUGIN_VERSION "1.3.1"
+#define PREFIX "\x01[\x03Отказ\x01]\x03 "
 
 ConVar g_hEnabled;
 ConVar g_hRoundUse;
@@ -23,12 +23,12 @@ bool g_bEnabled;
 
 int g_iRoundUse;
 int g_iRoundUsed[MAXPLAYERS+1];
-int g_iColor;
 int g_iMenuTime;
 int g_iNumCmds;
 
-char Reasons[26] = "configs/otkaz_reasons.ini";
+char Reasons[26] = "configs/otkaz_reasons.txt";
 char g_cChatCmds[16][32];
+char g_cColor[3][4];
 
 public Plugin myinfo =
 {
@@ -44,7 +44,7 @@ public void OnPluginStart()
 	CreateConVar("sm_otkaz_version", PLUGIN_VERSION, "Version of Otkaz", FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_SPONLY|FCVAR_REPLICATED);
 	g_hEnabled = CreateConVar("sm_otkaz_enabled", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	g_hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
-	g_hColor = CreateConVar("sm_otkaz_player_color", "1", "Красить игрока в синий цвет, когда он пишет отказ?", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
+	g_hColor = CreateConVar("sm_otkaz_player_color", "30 20 40", "RGB цвет в который красить игрока. 0 - off", FCVAR_NONE);
 	g_hMenuTime = CreateConVar("sm_otkaz_menu_time", "20", "Сколько секунд активно меню игрока.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
 	g_hChatCommands = CreateConVar("sm_otkaz_cmds", "!otkaz,!отказ,отказ", "Команды вызова меню отказа(каждая команда после запятой)", FCVAR_NONE);
 	//Needed to add HOOKS after this -^
@@ -70,7 +70,8 @@ public void OnConfigsExecuted()
 	g_bEnabled = g_hEnabled.BoolValue;
 	g_iMenuTime = g_hMenuTime.IntValue;
 	g_iRoundUse = g_hRoundUse.IntValue;
-	g_iColor = g_hColor.IntValue;
+	GetConVarString(g_hColor, cBuffer, sizeof(cBuffer));
+	ExplodeString(cBuffer, " ", g_cColor, sizeof(g_cColor), sizeof(g_cColor[]));
 	GetConVarString(g_hChatCommands, cBuffer, sizeof(cBuffer));
 	g_iNumCmds = ExplodeString(cBuffer, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
@@ -88,11 +89,11 @@ public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sN
 	else if (StrEqual("sm_otkaz_per_round", sConVarName))
 		g_iRoundUse = StringToInt(sNewValue);
 	else if (StrEqual("sm_otkaz_player_color", sConVarName))
-		g_iColor = StringToInt(sNewValue);
+		ExplodeString(sNewValue, " ", g_cColor, sizeof(g_cColor), sizeof(g_cColor[]));
 	else if (StrEqual("sm_otkaz_menu_time", sConVarName))
 		g_iMenuTime = StringToInt(sNewValue);
 	else if (StrEqual("sm_otkaz_cmds", sConVarName))
-		g_iNumCmds = ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
+		ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
 public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
@@ -111,10 +112,10 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		return Plugin_Stop;
 	
 	if(client && IsClientInGame(client))
-	{	
+	{
 		for (int i = 0; i < g_iNumCmds; i++)
 		{
-			if (StrEqual(command, g_cChatCmds[i], false))
+			if (StrEqual(sArgs, g_cChatCmds[i], false))
 			{
 				if(GetClientTeam(client) == 2)
 				{
@@ -128,12 +129,12 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 						else if (!g_iMenuTime)
 						{
 							g_hMenu.Display(client, MENU_TIME_FOREVER);
-							return Plugin_Stop;
+							return Plugin_Continue;
 						}
 						else
 						{
 							g_hMenu.Display(client, g_iMenuTime);
-							return Plugin_Stop;
+							return Plugin_Continue;
 						}
 					}
 					else
@@ -156,10 +157,10 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 
 void OtkazMenuInitialized()
 {
-	Handle oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.ini", "r");
+	Handle oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.txt", "r");
 	if (oprfile == null)
 	{
-		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.ini");
+		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.txt");
 		return;
 	}
 	g_hMenu = new Menu(OtkazMenuHandler);
@@ -178,9 +179,9 @@ public int OtkazMenuHandler(Handle menu, MenuAction action, int client, int iSlo
 	if (action == MenuAction_Select)
 	{
 		g_iRoundUsed[client]++;
-		if(g_iColor)
+		if(GetConVarInt(g_hColor))
 		{
-			SetEntityRenderColor(client, 30, 20, 40, 255);
+			SetEntityRenderColor(client, StringToInt(g_cColor[0]), StringToInt(g_cColor[1]), StringToInt(g_cColor[2]), 255);
 			g_hOtkaz_Timer[client] = CreateTimer(5.0, TimedColoring, client);
 		}
 		char Reason[85];
