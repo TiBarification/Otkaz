@@ -1,183 +1,220 @@
 #include <sourcemod>
 #include <cstrike>
 #include <sdktools>
+#include <protobuf>
 
-#define VERSION "1.3"
-#define PREFIX "\x04[\x03Отказ\x04]\x03 "
+#pragma semicolon 1
+//Force 1.7 syntax
+#pragma newdecls required
 
-new Handle:Enable;
-new Handle:hRoundUse, iRoundUse;
-new Handle:hColor;
-new Handle:hMenuTime;
-new Handle:otkaz_timer[MAXPLAYERS+1];
-new Handle:hMenu = INVALID_HANDLE;
-new iRoundUsed[MAXPLAYERS+1];
-new iMenuTime;
+#define PLUGIN_VERSION "1.3.1"
+#define PREFIX "\x01[\x03Отказ\x01]\x03 "
 
-new const String:Cmds[] = "configs/otkaz_cmds.ini";
-new const String:Reasons[] = "configs/otkaz_reasons.ini";
+ConVar g_hEnabled;
+ConVar g_hRoundUse;
+ConVar g_hColor;
+ConVar g_hMenuTime;
+ConVar g_hChatCommands;
 
-public Plugin:myinfo =
+Handle g_hOtkaz_Timer[MAXPLAYERS+1];
+Menu g_hMenu = null;
+
+bool g_bEnabled;
+
+int g_iRoundUse;
+int g_iRoundUsed[MAXPLAYERS+1];
+int g_iMenuTime;
+int g_iNumCmds;
+
+char Reasons[26] = "configs/otkaz_reasons.txt";
+char g_cChatCmds[16][32];
+char g_cColor[3][4];
+
+public Plugin myinfo =
 {
 	name = "JailBreak Otkaz",
 	description = "Command for T, that allow to abort commands comander.",
 	author = "White Wolf",
-	version = VERSION,
-	url = "http://arena-igr.ru"
+	version = PLUGIN_VERSION,
+	url = "http://steamcommunity.com/id/doctor_white"
 };
 
-public OnPluginStart()
+public void OnPluginStart()
 {
-	CreateConVar("sm_otkaz_version", VERSION, _, FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_SPONLY);
-	Enable = CreateConVar("sm_otkaz_enable", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
-	hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
-	hColor = CreateConVar("sm_otkaz_player_color", "1", "Красить игрока в синий цвет, когда он пишет отказ?", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
-	hMenuTime = CreateConVar("sm_otkaz_menu_time", "20", "Сколько секунд активно меню игрока.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
-	iMenuTime = GetConVarInt(hMenuTime);
-	iRoundUse = GetConVarInt(hRoundUse);
-	HookConVarChange(hRoundUse, OnConVarChange);
+	CreateConVar("sm_otkaz_version", PLUGIN_VERSION, "Version of Otkaz", FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_SPONLY|FCVAR_REPLICATED);
+	g_hEnabled = CreateConVar("sm_otkaz_enabled", "1", "Включение/Выключение плагина.", FCVAR_PLUGIN|FCVAR_REPLICATED|FCVAR_DONTRECORD, true, 0.0, true, 1.0);
+	g_hRoundUse = CreateConVar("sm_otkaz_per_round", "3", "Сколько отказов доступно за раунд.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
+	g_hColor = CreateConVar("sm_otkaz_player_color", "30 20 40", "RGB цвет в который красить игрока. 0 - off", FCVAR_NONE);
+	g_hMenuTime = CreateConVar("sm_otkaz_menu_time", "20", "Сколько секунд активно меню игрока.", FCVAR_PLUGIN|FCVAR_DONTRECORD, true, 0.0);
+	g_hChatCommands = CreateConVar("sm_otkaz_cmds", "!otkaz,!отказ,отказ", "Команды вызова меню отказа(каждая команда после запятой)", FCVAR_NONE);
+	//Needed to add HOOKS after this -^
+	
+	g_hEnabled.AddChangeHook(OnCvarChange);
+	g_hRoundUse.AddChangeHook(OnCvarChange);
+	g_hColor.AddChangeHook(OnCvarChange);
+	g_hMenuTime.AddChangeHook(OnCvarChange);
+	g_hChatCommands.AddChangeHook(OnCvarChange);
 	
 	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	
-	decl String:sBuffer[PLATFORM_MAX_PATH];
-	decl String:sBuffer2[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), Cmds);
-	BuildPath(Path_SM, sBuffer2, sizeof(sBuffer2), Reasons);
+	g_bEnabled = true;
+	
+	CreateCustomCfg(Reasons);
+	
+	OtkazMenuInitialized();
+}
+
+public void OnConfigsExecuted()
+{
+	char cBuffer[512];
+	g_bEnabled = g_hEnabled.BoolValue;
+	g_iMenuTime = g_hMenuTime.IntValue;
+	g_iRoundUse = g_hRoundUse.IntValue;
+	GetConVarString(g_hColor, cBuffer, sizeof(cBuffer));
+	ExplodeString(cBuffer, " ", g_cColor, sizeof(g_cColor), sizeof(g_cColor[]));
+	GetConVarString(g_hChatCommands, cBuffer, sizeof(cBuffer));
+	g_iNumCmds = ExplodeString(cBuffer, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
+}
+
+public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sNewValue)
+{
+	char sConVarName[64];
+	hConVar.GetName(sConVarName, sizeof(sConVarName));
+	
+	if (StrEqual("sm_otkaz_enabled", sConVarName))
+	{
+		if (g_bEnabled != hConVar.BoolValue)
+			g_bEnabled = hConVar.BoolValue;
+	}
+	else if (StrEqual("sm_otkaz_per_round", sConVarName))
+		g_iRoundUse = StringToInt(sNewValue);
+	else if (StrEqual("sm_otkaz_player_color", sConVarName))
+		ExplodeString(sNewValue, " ", g_cColor, sizeof(g_cColor), sizeof(g_cColor[]));
+	else if (StrEqual("sm_otkaz_menu_time", sConVarName))
+		g_iMenuTime = StringToInt(sNewValue);
+	else if (StrEqual("sm_otkaz_cmds", sConVarName))
+		ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
+}
+
+public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
+{
+	if (!g_bEnabled)
+		return;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		g_iRoundUsed[i] = 0;
+	}
+}
+
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
+{
+	if(!g_bEnabled)
+		return Plugin_Stop;
+	
+	if(client && IsClientInGame(client))
+	{
+		for (int i = 0; i < g_iNumCmds; i++)
+		{
+			if (StrEqual(sArgs, g_cChatCmds[i], false))
+			{
+				if(GetClientTeam(client) == 2)
+				{
+					if(IsPlayerAlive(client))
+					{
+						if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
+						{
+							PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, g_iRoundUse);
+							return Plugin_Stop;
+						}
+						else if (!g_iMenuTime)
+						{
+							g_hMenu.Display(client, MENU_TIME_FOREVER);
+							return Plugin_Continue;
+						}
+						else
+						{
+							g_hMenu.Display(client, g_iMenuTime);
+							return Plugin_Continue;
+						}
+					}
+					else
+					{
+						PrintToChat(client, "%sВы должны быть живы.", PREFIX);
+						return Plugin_Stop;
+					}
+				}
+				else
+				{
+					PrintToChat(client, "%sВы должны быть заключенным.", PREFIX);
+					return Plugin_Stop;
+				}
+			}
+		}
+	}
+	
+	return Plugin_Continue;
+}
+
+void OtkazMenuInitialized()
+{
+	Handle oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.txt", "r");
+	if (oprfile == null)
+	{
+		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.txt");
+		return;
+	}
+	g_hMenu = new Menu(OtkazMenuHandler);
+	char StR[85];
+	SetMenuTitle(g_hMenu, "Выберите причину отказа:\n \n");
+	while (!IsEndOfFile(oprfile) && ReadFileLine(oprfile, StR, sizeof(StR)))
+	{
+		g_hMenu.AddItem(StR, StR);
+	}
+	CloseHandle(oprfile);
+	g_hMenu.ExitButton = true;
+}
+
+public int OtkazMenuHandler(Handle menu, MenuAction action, int client, int iSlot)
+{
+	if (action == MenuAction_Select)
+	{
+		g_iRoundUsed[client]++;
+		if(GetConVarInt(g_hColor))
+		{
+			SetEntityRenderColor(client, StringToInt(g_cColor[0]), StringToInt(g_cColor[1]), StringToInt(g_cColor[2]), 255);
+			g_hOtkaz_Timer[client] = CreateTimer(5.0, TimedColoring, client);
+		}
+		char Reason[85];
+		GetMenuItem(menu, iSlot, Reason, sizeof(Reason));
+		PrintToChatAll("%s\x04%N\x03 написал отказ. Причина: \x04%s", PREFIX, client, Reason);
+	}
+	else if(action == MenuAction_End)
+	{
+		return;
+	}
+}
+
+public void OnClientDisconnect(int client)
+{
+	if (g_hOtkaz_Timer[client] != null)
+	{
+		KillTimer(g_hOtkaz_Timer[client]);
+		g_hOtkaz_Timer[client] = null;
+	}
+}
+
+public Action TimedColoring(Handle timer, any client)
+{
+	SetEntityRenderColor(client, 255, 255, 255, 255);
+	g_hOtkaz_Timer[client] = null;
+}
+
+stock void CreateCustomCfg(const char[] Path)
+{
+	char sBuffer[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), Path);
 	if(!FileExists(sBuffer))
 	{
 		SetFailState("Не найден файл %s", sBuffer);
 	}
-	else if(!FileExists(sBuffer2))
-	{
-		SetFailState("Не найден файл %s", sBuffer2);
-	}
-	new Handle:hFile = OpenFile(sBuffer, "r");
-	
-	if(hFile != INVALID_HANDLE)
-	{
-		while (!IsEndOfFile(hFile) && ReadFileLine(hFile, sBuffer, sizeof(sBuffer)))
-		{
-			TrimString(sBuffer);
-			
-			if (sBuffer[0])
-			{
-				RegConsoleCmd(sBuffer, Reset);
-			}
-		}
-		//SetFailState("Не удалось открыть файл %s", sBuffer);
-		CloseHandle(hFile);
-	}
-	
-	OtkazMenuInitialized();
-	
-	AutoExecConfig(true, "otkaz");
-}
-
-public OnConVarChange(Handle:convar, const String:oldValue[], const String:newValue[])
-{
-	iRoundUse = StringToInt(newValue);
-	iMenuTime = StringToInt(newValue);
-}
-
-public OnRoundStart(Handle:event, const String:name[], bool:donBroadcast)
-{
-	for (new i = 1; i <= MaxClients; i++)
-	{
-		iRoundUsed[i] = 0;
-	}
-}
-
-public Action:Reset(client, args)
-{
-	if(!GetConVarBool(Enable))
-	{
-		return Plugin_Continue;
-	}
-	if(!IsFakeClient(client) && IsClientInGame(client))
-	{
-		if(GetClientTeam(client) == 2)
-		{
-			if (iRoundUse > 0 && iRoundUsed[client] >= iRoundUse)
-			{
-				PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, iRoundUse);
-				return Plugin_Handled;
-			}
-			if(IsPlayerAlive(client))
-			{
-				if (iMenuTime == 0)
-				{
-					DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
-				}
-				else
-				{
-					DisplayMenu(hMenu, client, iMenuTime);
-				}
-			}
-			else
-			{
-				PrintToChat(client, "%sВы должны быть живы.", PREFIX);
-			}
-		}
-		else
-		{
-			PrintToChat(client, "%sВы должны быть заключенным.", PREFIX);
-		}
-	}
-	return Plugin_Handled;
-}
-
-OtkazMenuInitialized()
-{
-	new Handle:oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.ini", "r");
-	if (oprfile == INVALID_HANDLE)
-	{
-		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.ini");
-		return;
-	}
-	hMenu = CreateMenu(OtkazMenuHandler);
-	decl String:StR[85];
-	SetMenuTitle(hMenu, "Выберите причину отказа:\n \n");
-	while (!IsEndOfFile(oprfile) && ReadFileLine(oprfile, StR, sizeof(StR)))
-	{
-		AddMenuItem(hMenu, StR, StR);
-	}
-	CloseHandle(oprfile);
-	SetMenuExitBackButton(hMenu, false);
-	SetMenuExitButton(hMenu, true);
-}
-
-public OtkazMenuHandler(Handle:menu, MenuAction:action, client, iSlot)
-{
-	if (action == MenuAction_Select)
-	{
-		iRoundUsed[client]++;
-		if(GetConVarBool(hColor))
-		{
-			SetEntityRenderColor(client, 0, 0, 255, 255);
-			otkaz_timer[client] = CreateTimer(1.5, TimedColoring, client);
-		}
-		decl String:Reason[85];
-		GetMenuItem(menu, iSlot, Reason, 85);
-		PrintToChatAll("%s\x07FF0000%N\x03 написал отказ. Причина: \x070000FF%s", PREFIX, client, Reason);
-	}
-	else if(action == MenuAction_End)
-	{
-		//CloseHandle(menu);
-		return;
-	}
-}
-
-public OnClientDisconnect(client)
-{
-	if (otkaz_timer[client] != INVALID_HANDLE)
-	{
-		KillTimer(otkaz_timer[client]);
-		otkaz_timer[client] = INVALID_HANDLE;
-	}
-}
-
-public Action:TimedColoring(Handle:timer, any:client)
-{
-	SetEntityRenderColor(client, 255, 255, 255, 255);
-	otkaz_timer[client] = INVALID_HANDLE;
 }
