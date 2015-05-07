@@ -1,7 +1,6 @@
 #include <sourcemod>
 #include <cstrike>
 #include <sdktools>
-#include <protobuf>
 
 #pragma semicolon 1
 //Force 1.7 syntax
@@ -54,6 +53,8 @@ public void OnPluginStart()
 	g_hColor.AddChangeHook(OnCvarChange);
 	g_hMenuTime.AddChangeHook(OnCvarChange);
 	g_hChatCommands.AddChangeHook(OnCvarChange);
+	
+	AutoExecConfig(true, "otkaz");
 	
 	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	
