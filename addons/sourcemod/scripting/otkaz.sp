@@ -10,7 +10,7 @@
 #define PLUGIN_VERSION "1.3.1"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
-#define DEBUG 1
+#define DEBUG 0
 
 ConVar g_hEnabled;
 ConVar g_hRoundUse;
