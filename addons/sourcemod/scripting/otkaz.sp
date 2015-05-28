@@ -7,7 +7,7 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.1"
+#define PLUGIN_VERSION "1.3.2"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -144,7 +144,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	{
 		for (int i = 0; i < g_iNumCmds; i++)
 		{
-			if (StrEqual(sArgs, g_cChatCmds[i], false))
+			if (StrEqual(sArgs, g_cChatCmds[i], true)) // If !Otkaz and !otkaz different items we set 3 argument to true
 			{
 				if(GetClientTeam(client) == 2)
 				{
