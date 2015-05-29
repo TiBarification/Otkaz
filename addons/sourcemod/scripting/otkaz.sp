@@ -231,6 +231,7 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			g_iRoundUsed[client]++;
 			if(GetConVarInt(g_hColor))
 			{
+				SetEntityRenderMode(client, RENDER_TRANSCOLOR);
 				SetEntityRenderColor(client, StringToInt(g_cColor[0]), StringToInt(g_cColor[1]), StringToInt(g_cColor[2]), 255);
 			}
 			char cThatReason[85];
@@ -397,6 +398,9 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 					PrintToChatAll("iTarget = %i", iTarget);
 				#endif
 				PrintToChatAll("%s%N рассмотрел отказ зека %N", PREFIX, client, iTarget);
+				
+				//Set Default Color to iTarget
+				SetEntityRenderMode(iTarget, RENDER_TRANSCOLOR);
 				SetEntityRenderColor(iTarget, 255, 255, 255, 255);
 				
 				int iIndex = GetIndexOfOtkazPlayer(hArray, iTarget);
@@ -407,10 +411,13 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 	}
 }
 
-public void OnClientDisconnect(int client)
+/* public void OnClientDisconnect(int client)
 {
-	Otkaz_RemoveFromArray(g_iTarget[client][INDEX]);
-}
+	Handle hArray;
+	int iClient = GetTargetOfOtkazPlayer(client, hArray);
+	int iIndex = GetIndexOfOtkazPlayer(hArray, iClient);
+	Otkaz_RemoveFromArray(iIndex);
+} */
 
 stock int GetTargetOfOtkazPlayer(int client, Handle hArray)
 {
