@@ -1,13 +1,16 @@
 #include <sourcemod>
 #include <cstrike>
 #include <sdktools>
-#include <jail_control>
+#undef REQUIRE_PLUGIN
+#tryinclude <jail_control>
+#tryinclude <tf2jail>
+#tryinclude <warden>
 
 #pragma semicolon 1
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.2"
+#define PLUGIN_VERSION "1.3.3"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -25,6 +28,11 @@ Panel OtkazStatusPanel;
 bool g_bEnabled;
 bool g_bBlockotkaz[MAXPLAYERS+1] = false;
 
+//PLUGINS BOOL's
+bool g_bWarden;
+bool g_bJailControl;
+bool g_bTF2Jail;
+
 int g_iRoundUse;
 int g_iRoundUsed[MAXPLAYERS+1];
 int g_iMenuTime;
@@ -39,7 +47,8 @@ enum
 	ID = 0,
 	NAME,
 	REASON,
-	TIME
+	TIME,
+	SIZE
 }
 
 enum Target
@@ -81,10 +90,13 @@ public void OnPluginStart()
 	AutoExecConfig(true, "otkaz");
 	
 	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	HookEvent("player_death", OnPlayerDeath);
 	
 	g_bEnabled = true;
 	
-	RegConsoleCmd("sm_otkazview", Command_OtkazView, "View otkaz menu");
+	RegConsoleCmd("sm_wotkaz", Command_OtkazView, "View otkaz menu");
+	
+	PrintToServer("Engine Version : %s |Plugin Version: %s", GetEngineVersion(), PLUGIN_VERSION);
 	
 	CreateCustomCfg(Reasons);
 	
@@ -123,16 +135,47 @@ public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sN
 		ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
-public void OnRoundStart(Handle event, const char[] name, bool donBroadcast)
+public void OnAllPluginsLoaded()
+{
+	g_bWarden = LibraryExists("warden");
+	g_bJailControl = LibraryExists("jail_control");
+	g_bTF2Jail = LibraryExists("tf2jail");
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+	g_bWarden = StrEqual(name, "warden");
+	g_bJailControl = StrEqual(name, "jail_control");
+	g_bTF2Jail = StrEqual(name, "tf2jail");
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+	g_bWarden = StrEqual(name, "warden");
+	g_bJailControl = StrEqual(name, "jail_control");
+	g_bTF2Jail = StrEqual(name, "tf2jail");
+}
+
+public void OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
 {
 	if (!g_bEnabled)
 		return;
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		g_iRoundUsed[i] = 0;
+		g_bBlockotkaz[i] = false;
 		//If exists then
 		Clear_OtkazHistory();
 	}
+}
+
+public void OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
+{
+	if (!g_bEnabled)
+		return;
+	int iClient = GetClientOfUserId(GetEventInt(event, "userid"));
+	
+	RemoveClientFromMenu(iClient);
 }
 
 public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
@@ -146,6 +189,9 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		{
 			if (StrEqual(sArgs, g_cChatCmds[i], true)) // If !Otkaz and !otkaz different items we set 3 argument to true
 			{
+				#if DEBUG
+					PrintToChatAll("g_cChatCmds[i] = %s", g_cChatCmds[i]);
+				#endif
 				if(GetClientTeam(client) == 2)
 				{
 					if(IsPlayerAlive(client))
@@ -194,10 +240,27 @@ public Action Command_OtkazView(int client, int args)
 {
 	if (!IsFakeClient(client) && IsClientInGame(client) )
 	{
-		if (GetClientTeam(client) == CS_TEAM_CT && Jail_IsClientCommander(client))
-			CmdOtkazMenu(client);
-		else
-			PrintToChat(client, "%sНужно быть коммандиром", PREFIX);
+		if (GetEngineVersion() == Engine_CSS || GetEngineVersion() == Engine_CSGO)
+		{
+			#if DEBUG
+				PrintToChatAll("g_bJailControl = %i, g_bWarden = %i, g_bTF2Jail = %i", g_bJailControl, g_bWarden, g_bTF2Jail);
+				CmdOtkazMenu(client);
+			#else
+			if (g_bWarden && warden_iswarden(client))
+				CmdOtkazMenu(client);
+			else if (g_bJailControl && Jail_IsClientCommander(client))
+				CmdOtkazMenu(client);
+			else
+				PrintToChat(client, "%sНужно быть коммандиром", PREFIX);
+			#endif
+		}
+		else if (GetEngineVersion() == Engine_TF2)
+		{
+			if (g_bTF2Jail && TF2Jail_IsWarden(client))
+				CmdOtkazMenu(client);
+			else
+				PrintToChat(client, "%sНужно быть коммандиром", PREFIX);
+		}
 	}
 
 	return Plugin_Handled;
@@ -266,14 +329,14 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			
 			//LOCAL Array to work with this
 			Handle hArray;
-			hArray = CreateArray(125);
+			hArray = CreateArray(125, SIZE);
 			
 			//At First
 			GetClientName(client, cName, sizeof(cName));
-			PushArrayCell(hArray, client); //Save client ID for some reason
-			PushArrayString(hArray, cName);
-			PushArrayString(hArray, cFullReason);
-			PushArrayString(hArray, cTimebuff);
+			SetArrayCell(hArray, ID, client); //Save client ID for some reason
+			SetArrayString(hArray, NAME, cName);
+			SetArrayString(hArray, REASON, cFullReason);
+			SetArrayString(hArray, TIME, cTimebuff);
 			PushArrayCell(g_hData, hArray);
 		}
 		case MenuAction_End: return;
@@ -297,6 +360,7 @@ public int OtkazStatusPanel_Handler(Menu panel, MenuAction action, int client, i
 void CmdOtkazMenu(int client)
 {
 	int iSize = GetArraySize(g_hData);
+	PrintToChatAll("iSize = %i", iSize);
 	if (iSize == 0)
 		PrintToChat(client, "%sНет игроков с отказами", PREFIX);
 	else
@@ -370,7 +434,7 @@ void CmdOtkazDetailMenu(int client)
 		PrintToChatAll("Массив 2: %s", cAReason);
 		PrintToChatAll("Массив 3: %s", cTime);
 	#endif
-	SetMenuExitBackButton(hMenu, true);
+	hMenu.ExitBackButton = true;
 	hMenu.Display(client, MENU_TIME_FOREVER);
 }
 
@@ -393,43 +457,60 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 			else
 			{
 				Handle hArray;
-				int iTarget = GetTargetOfOtkazPlayer(client, hArray);
-				#if DEBUG
-					PrintToChatAll("iTarget = %i", iTarget);
-				#endif
+				hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
+				int iTarget = GetArrayCell(hArray, ID);
+				
 				PrintToChatAll("%s%N рассмотрел отказ зека %N", PREFIX, client, iTarget);
 				
 				//Set Default Color to iTarget
 				SetEntityRenderMode(iTarget, RENDER_TRANSCOLOR);
 				SetEntityRenderColor(iTarget, 255, 255, 255, 255);
 				
-				int iIndex = GetIndexOfOtkazPlayer(hArray, iTarget);
-				Otkaz_RemoveFromArray(iIndex);
+				g_bBlockotkaz[iTarget] = false;
+				int iIndex = FindValueInArray(hArray, iTarget);
+				if (iIndex != -1)
+				{
+					#if DEBUG
+						PrintToChatAll("iTarget = %i", iTarget);
+						PrintToChatAll("iIndex = %i", iIndex);
+					#endif
+					Otkaz_RemoveFromArray(iIndex);
+				}
+				CloseHandle(hArray);
 				CmdOtkazMenu(client);
 			}
 		}
 	}
 }
 
-/* public void OnClientDisconnect(int client)
+public void OnClientDisconnect(int client)
 {
-	Handle hArray;
-	int iClient = GetTargetOfOtkazPlayer(client, hArray);
-	int iIndex = GetIndexOfOtkazPlayer(hArray, iClient);
-	Otkaz_RemoveFromArray(iIndex);
-} */
-
-stock int GetTargetOfOtkazPlayer(int client, Handle hArray)
-{
-	hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
-	int iTarget = GetArrayCell(hArray, ID);
-	return iTarget;
+	RemoveClientFromMenu(client);
 }
 
-int GetIndexOfOtkazPlayer(Handle hArray, int iTarget)
+stock bool RemoveClientFromMenu(int client)
 {
-	int iIndex = FindValueInArray(hArray, iTarget);
-	return iIndex;
+	if (client == 0 && GetClientTeam(client) != 2) return false;
+	int iSize = GetArraySize(g_hData);
+	if (iSize == 0) return false;
+	Handle hArray;
+	int iIndex;
+	for (int i=iSize-1; i>=0; --i)
+		hArray = GetArrayCell(g_hData, i);
+	if (GetArrayCell(hArray, ID) == client)
+	{
+		// Find client ID from g_hData Simple using, Thanks R1KO for this.
+		// iIndex = GetArrayCell(hArray, ID);
+		// PrintToChatAll("iIndex = %i", iIndex);
+		iIndex = FindValueInArray(hArray, client);
+		Otkaz_RemoveFromArray(iIndex);
+		
+		//From wiki it's CloseHandle(hArray);
+		delete hArray;
+
+		return true;
+	}
+	return false;
 }
 
 stock void CreateCustomCfg(const char[] Path)
