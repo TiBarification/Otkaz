@@ -100,6 +100,8 @@ public void OnPluginStart()
 	
 	CreateCustomCfg(Reasons);
 	
+	LoadTranslations("otkaz.phrases");
+	
 	OtkazMenuInitialized();
 }
 
@@ -203,7 +205,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 						}
 						else if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
 						{
-							PrintToChat(client, "%sВы не можете использовать отказ больше чем %i раз(а).", PREFIX, g_iRoundUse);
+							PrintToChat(client, "%s%t", PREFIX, "Round Use", g_iRoundUse);
 							return Plugin_Stop;
 						}
 						else if (!g_iMenuTime)
@@ -220,13 +222,13 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 					}
 					else
 					{
-						PrintToChat(client, "%sВы должны быть живы.", PREFIX);
+						PrintToChat(client, "%s%t", PREFIX, "Must be Alive");
 						return Plugin_Stop;
 					}
 				}
 				else
 				{
-					PrintToChat(client, "%sВы должны быть заключенным.", PREFIX);
+					PrintToChat(client, "%s%t", PREFIX, "Only Prisoner");
 					return Plugin_Stop;
 				}
 			}
@@ -251,7 +253,7 @@ public Action Command_OtkazView(int client, int args)
 			else if (g_bJailControl && Jail_IsClientCommander(client))
 				CmdOtkazMenu(client);
 			else
-				PrintToChat(client, "%sНужно быть коммандиром", PREFIX);
+				PrintToChat(client, "%s%t", PREFIX, "Only Warden");
 			#endif
 		}
 		else if (GetEngineVersion() == Engine_TF2)
@@ -259,7 +261,7 @@ public Action Command_OtkazView(int client, int args)
 			if (g_bTF2Jail && TF2Jail_IsWarden(client))
 				CmdOtkazMenu(client);
 			else
-				PrintToChat(client, "%sНужно быть коммандиром", PREFIX);
+				PrintToChat(client, "%s%t", PREFIX, "Only Warden");
 		}
 	}
 
@@ -276,7 +278,9 @@ void OtkazMenuInitialized()
 	}
 	g_hMenu = new Menu(OtkazMenuHandler);
 	char StR[MAX_REASON_SIZE];
-	g_hMenu.SetTitle("Выберите причину отказа:\n \n");
+	char cLangTitle[512];
+	FormatEx(cLangTitle, sizeof(cLangTitle), "%t", "Reason Select");
+	g_hMenu.SetTitle(cLangTitle);
 	while (!IsEndOfFile(oprfile) && ReadFileLine(oprfile, StR, sizeof(StR)))
 	{
 		g_hMenu.AddItem(StR, StR);
@@ -297,33 +301,39 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 				SetEntityRenderMode(client, RENDER_TRANSCOLOR);
 				SetEntityRenderColor(client, StringToInt(g_cColor[0]), StringToInt(g_cColor[1]), StringToInt(g_cColor[2]), 255);
 			}
-			char cThatReason[85];
+			char cReason[85];
 			char cFullReason[256];
 			char cTime[48];
 			char cTimebuff[128];
 			char cName[MAX_NAME_LENGTH];
 			
-			GetMenuItem(menu, iSlot, cThatReason, sizeof(cThatReason));
-			PrintToChatAll("%s\x04%N\x03 написал отказ. Причина: \x04%s", PREFIX, client, cThatReason);
+			GetMenuItem(menu, iSlot, cReason, sizeof(cReason));
+			char cChatNotify[1024];
+			FormatEx(cChatNotify, sizeof(cChatNotify), "%t", "Chat Notify", client, cReason);
+			PrintToChatAll("%s\x04%s", PREFIX, cChatNotify);
 			
 			//Block otkaz for those who wanna flood
 			g_bBlockotkaz[client] = true;
 			
 			//As request we're adding waiting Menu
 			OtkazStatusPanel = new Panel();
-			OtkazStatusPanel.SetTitle("Статус жалобы:\n");
-			OtkazStatusPanel.DrawText("Вы написали жалобу, ждите рассмотрение");
-			OtkazStatusPanel.DrawText("вашей жалобы командиром.");
+			char cLangText[86];
+			FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status");
+			OtkazStatusPanel.SetTitle(cLangText);
+			FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text1");
+			OtkazStatusPanel.DrawText(cLangText);
+			FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text2");
+			OtkazStatusPanel.DrawText(cLangText);
 			
 			
-			FormatEx(cFullReason, sizeof(cFullReason), "Причина: %s", cThatReason);
+			FormatEx(cFullReason, sizeof(cFullReason), "%t", "Reason", cReason);
 			OtkazStatusPanel.DrawItem(cFullReason);
 			
 			//Get current time and put in char
 			FormatTime(cTime, sizeof(cTime), "%H:%M:%S", GetTime());
 			
 			//Get Full String and put in char
-			FormatEx(cTimebuff, sizeof(cTimebuff), "Время жалобы: %s", cTime);
+			FormatEx(cTimebuff, sizeof(cTimebuff), "%t", "Reason Time", cTime);
 			OtkazStatusPanel.DrawText(cTimebuff);
 			OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, 5);
 			
@@ -335,8 +345,8 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			GetClientName(client, cName, sizeof(cName));
 			SetArrayCell(hArray, ID, client); //Save client ID for some reason
 			SetArrayString(hArray, NAME, cName);
-			SetArrayString(hArray, REASON, cFullReason);
-			SetArrayString(hArray, TIME, cTimebuff);
+			SetArrayString(hArray, REASON, cReason);
+			SetArrayCell(hArray, TIME, GetTime());
 			PushArrayCell(g_hData, hArray);
 		}
 		case MenuAction_End: return;
@@ -360,9 +370,11 @@ public int OtkazStatusPanel_Handler(Menu panel, MenuAction action, int client, i
 void CmdOtkazMenu(int client)
 {
 	int iSize = GetArraySize(g_hData);
-	PrintToChatAll("iSize = %i", iSize);
+	#if DEBUG
+		PrintToChatAll("iSize = %i", iSize);
+	#endif
 	if (iSize == 0)
-		PrintToChat(client, "%sНет игроков с отказами", PREFIX);
+		PrintToChat(client, "%s%t", PREFIX, "No Players");
 	else
 	{
 		g_hCmdMenu = new Menu(MenuHandler_CmdOtkazMenu);
@@ -371,7 +383,7 @@ void CmdOtkazMenu(int client)
 		char cIndex[5];
 		Handle hArray;
 		
-		FormatEx(cTitle, sizeof(cTitle), "Активные отказы");
+		FormatEx(cTitle, sizeof(cTitle), "%t", "Active Otkazes");
 		g_hCmdMenu.SetTitle(cTitle);
 		
 		for (int i=iSize-1; i>=0; --i) //FRESH Otkaz'es will be at first point
@@ -379,7 +391,7 @@ void CmdOtkazMenu(int client)
 			hArray = GetArrayCell(g_hData, i);
 			GetArrayString(hArray, NAME, cName, sizeof(cName));
 			FormatEx(cTitle, sizeof(cTitle), "%s", cName);
-				
+			
 			IntToString(i, cIndex, sizeof(cIndex));
 			g_hCmdMenu.AddItem(cIndex, cTitle);
 		}
@@ -407,32 +419,42 @@ public int MenuHandler_CmdOtkazMenu(Menu menu, MenuAction action, int client, in
 void CmdOtkazDetailMenu(int client)
 {
 	char cName[MAX_NAME_LENGTH];
-	char cAReason[MAX_REASON_SIZE];
+	char cReason[MAX_REASON_SIZE];
+	int iTime;
 	char cTime[256];
-	char cTitle[128];
+	char cLangText[256];
 	Handle hArray;
 	
 	
 	hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
 	GetArrayString(hArray, NAME, cName, sizeof(cName));
-	GetArrayString(hArray, REASON, cAReason, sizeof(cAReason));
-	GetArrayString(hArray, TIME, cTime, sizeof(cTime));
+	GetArrayString(hArray, REASON, cReason, sizeof(cReason));
+	iTime = GetArrayCell(hArray, TIME);
 	
 	Menu hMenu = new Menu(MenuHandler_CmdOtkazDetailMenu);
 	
-	FormatEx(cTitle, sizeof(cTitle), "Детали отказа - %s", cName);
-	hMenu.SetTitle(cTitle);
-	hMenu.AddItem("Reason", cAReason);
-	hMenu.AddItem("Time", cTime);
+	//Menu Title
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Details", cName);
+	hMenu.SetTitle(cLangText);
+	//Reason
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Reason", cReason);
+	hMenu.AddItem("Reason", cLangText);
+	//Time
+	FormatTime(cTime, sizeof(cTime), "%H:%M:%S", iTime);
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Reason Time", cTime);
+	hMenu.AddItem("Time", cLangText);
+	//Spacer
 	hMenu.AddItem("", "", ITEMDRAW_SPACER);
-	hMenu.AddItem("Finish", "Рассмотреть отказ");
+	//Finish
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Finish Otkaz");
+	hMenu.AddItem("Finish", cLangText);
 	
 	#if DEBUG
 		int targetid = GetArrayCell(hArray, ID);
 		PrintToChatAll("Массив 0: %i", targetid);
 		PrintToChatAll("Массив 1: %s", cName);
-		PrintToChatAll("Массив 2: %s", cAReason);
-		PrintToChatAll("Массив 3: %s", cTime);
+		PrintToChatAll("Массив 2: %s", cReason);
+		PrintToChatAll("Массив 3: %i", iTime);
 	#endif
 	hMenu.ExitBackButton = true;
 	hMenu.Display(client, MENU_TIME_FOREVER);
@@ -460,7 +482,7 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 				hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
 				int iTarget = GetArrayCell(hArray, ID);
 				
-				PrintToChatAll("%s%N рассмотрел отказ зека %N", PREFIX, client, iTarget);
+				PrintToChatAll("%s%t", PREFIX, "Notify Otkaz Finished", client, iTarget);
 				
 				//Set Default Color to iTarget
 				SetEntityRenderMode(iTarget, RENDER_TRANSCOLOR);
