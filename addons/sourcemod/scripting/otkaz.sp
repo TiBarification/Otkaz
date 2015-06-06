@@ -1,5 +1,4 @@
 #include <sourcemod>
-#include <cstrike>
 #include <sdktools>
 #undef REQUIRE_PLUGIN
 #tryinclude <jail_control>
