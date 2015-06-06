@@ -1,0 +1,89 @@
+"Phrases"
+{
+	"Round Use"
+	{
+		"#format"	"{1:i}"
+		"en"	"You can't use it more that {1} times at round."
+		"ru"	"Вы не можете использовать отказ больше чем {1} раз(а)."
+	}
+	"Must be Alive"
+	{
+		"en"	"You must be alive."
+		"ru"	"Вы должны быть живы."
+	}
+	"Only Prisoner"
+	{
+		"en"	"You must be a terrorist."
+		"ru"	"Вы должны быть заключенным."
+	}
+	"Only Warden"
+	{
+		"en"	"You must be a jail warden."
+		"ru"	"Нужно быть коммандиром."
+	}
+	"Reason Select"
+	{
+		"en"	"Select reason of otkaz:"
+		"ru"	"Выберите причину отказа:"
+	}
+	"Chat Notify"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"	"{1} wroted otkaz. Reason: {2}."
+		"ru"	"{1} написал отказ. Причина: {2}."
+	}
+	"Otkaz Status"
+	{
+		"en"	"Otkaz Status"
+		"ru"	"Статус жалобы"
+	}
+	"Otkaz Status Text1"
+	{
+		"en"	"You posted otkaz, please wait"
+		"ru"	"Вы написали жалобу, ждите рассмотрение"
+	}
+	"Otkaz Status Text2"
+	{
+		"en"	"for response by warden"
+		"ru"	"вашей жалобы командиром."
+	}
+	"Reason"
+	{
+		"#format"	"{1:s}"
+		"en"	"Reason: {1}"
+		"ru"	"Причина: {1}"
+	}
+	"Reason Time"
+	{
+		"#format"	"{1:s}"
+		"en"	"Time: {1}"
+		"ru"	"Время жалобы: {1}"
+	}
+	"No Players"
+	{
+		"en"	"No players."
+		"ru"	"Нет игроков с отказами."
+	}
+	"Active Otkazes"
+	{
+		"en"	"Active Otkazes"
+		"ru"	"Активные отказы"
+	}
+	"Otkaz Details"
+	{
+		"#format"	"{1:s}"
+		"en"	"Otkaz details - {1}"
+		"ru"	"Детали отказа - {1}"
+	}
+	"Finish Otkaz"
+	{
+		"en"	"Finish otkaz"
+		"ru"	"Рассмотреть отказ"
+	}
+	"Notify Otkaz Finished"
+	{
+		"#format"	"{1:N},{2:N}"
+		"en"	"{1} watched otkaz by {2}."
+		"ru"	"{1} рассмотрел отказ зека {2}."
+	}
+}
