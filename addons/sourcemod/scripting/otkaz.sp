@@ -88,7 +88,11 @@ public void OnPluginStart()
 	
 	AutoExecConfig(true, "otkaz");
 	
-	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	if (GetEngineVersion() == Engine_CSGO || GetEngineVersion() == Engine_CSS)
+		HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	else if (GetEngineVersion() == Engine_TF2)
+		HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	
 	HookEvent("player_death", OnPlayerDeath);
 	
 	g_bEnabled = true;
