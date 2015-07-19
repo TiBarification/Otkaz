@@ -310,7 +310,7 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			char cTimebuff[128];
 			char cName[MAX_NAME_LENGTH];
 			
-			GetMenuItem(menu, iSlot, cReason, sizeof(cReason));
+			menu.GetItem(iSlot, cReason, sizeof(cReason));
 			char cChatNotify[1024];
 			FormatEx(cChatNotify, sizeof(cChatNotify), "%t", "Chat Notify", client, cReason);
 			PrintToChatAll("%s\x04%s", PREFIX, cChatNotify);
@@ -411,7 +411,7 @@ public int MenuHandler_CmdOtkazMenu(Menu menu, MenuAction action, int client, in
 		case MenuAction_Select:
 		{
 			char cIndex[5];
-			GetMenuItem(menu, iSlot, cIndex, sizeof(cIndex));
+			menu.GetItem(iSlot, cIndex, sizeof(cIndex));
 			g_iTarget[client][INDEX] = StringToInt(cIndex);
 			
 			CmdOtkazDetailMenu(client);
@@ -521,19 +521,21 @@ stock bool RemoveClientFromMenu(int client)
 	Handle hArray;
 	int iIndex;
 	for (int i=iSize-1; i>=0; --i)
-		hArray = GetArrayCell(g_hData, i);
-	if (GetArrayCell(hArray, ID) == client)
 	{
-		// Find client ID from g_hData Simple using, Thanks R1KO for this.
-		// iIndex = GetArrayCell(hArray, ID);
-		// PrintToChatAll("iIndex = %i", iIndex);
-		iIndex = FindValueInArray(hArray, client);
-		Otkaz_RemoveFromArray(iIndex);
-		
-		//From wiki it's CloseHandle(hArray);
-		delete hArray;
+		hArray = GetArrayCell(g_hData, i);
+		if (GetArrayCell(hArray, ID) == client)
+		{
+			// Find client ID from g_hData Simple using, Thanks R1KO for this.
+			// iIndex = GetArrayCell(hArray, ID);
+			// PrintToChatAll("iIndex = %i", iIndex);
+			iIndex = FindValueInArray(hArray, client);
+			Otkaz_RemoveFromArray(iIndex);
+			
+			//From wiki it's CloseHandle(hArray);
+			delete hArray;
 
-		return true;
+			return true;
+		}
 	}
 	return false;
 }
