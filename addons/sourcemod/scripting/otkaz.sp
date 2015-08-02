@@ -9,7 +9,7 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.3"
+#define PLUGIN_VERSION "1.3.4"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -57,7 +57,7 @@ enum Target
 
 int g_iTarget[MAXPLAYERS+1][Target];
 
-Handle g_hData = null;
+ArrayList g_hData;
 
 public Plugin myinfo =
 {
@@ -84,7 +84,7 @@ public void OnPluginStart()
 	g_hMenuTime.AddChangeHook(OnCvarChange);
 	g_hChatCommands.AddChangeHook(OnCvarChange);
 	
-	g_hData = CreateArray(125);
+	g_hData = new ArrayList(64);
 	
 	AutoExecConfig(true, "otkaz");
 	
@@ -341,16 +341,16 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, 5);
 			
 			//LOCAL Array to work with this
-			Handle hArray;
-			hArray = CreateArray(125, SIZE);
+			ArrayList hArray;
+			hArray = new ArrayList(125, SIZE);
 			
 			//At First
 			GetClientName(client, cName, sizeof(cName));
-			SetArrayCell(hArray, ID, client); //Save client ID for some reason
-			SetArrayString(hArray, NAME, cName);
-			SetArrayString(hArray, REASON, cReason);
-			SetArrayCell(hArray, TIME, GetTime());
-			PushArrayCell(g_hData, hArray);
+			hArray.Set(ID, client); //Save client ID for some reason
+			hArray.SetString(NAME, cName);
+			hArray.SetString(REASON, cReason);
+			hArray.Set(TIME, GetTime());
+			g_hData.Push(hArray);
 		}
 		case MenuAction_End: return;
 	}
@@ -361,12 +361,8 @@ public int OtkazStatusPanel_Handler(Menu panel, MenuAction action, int client, i
 {
 	switch (action)
 	{
-		case MenuAction_Select:
-		{
-			EmitSoundToClient(client, "buttons/button14.wav");
-		}
-		case MenuAction_End:
-			EmitSoundToClient(client, "buttons/combine_button7.wav");
+		case MenuAction_Select: EmitSoundToClient(client, "buttons/button14.wav");
+		case MenuAction_End: EmitSoundToClient(client, "buttons/combine_button7.wav");
 	}
 }
 
@@ -384,15 +380,15 @@ void CmdOtkazMenu(int client)
 		char cTitle[128];
 		char cName[MAX_NAME_LENGTH];
 		char cIndex[5];
-		Handle hArray;
+		ArrayList hArray;
 		
 		FormatEx(cTitle, sizeof(cTitle), "%t", "Active Otkazes");
 		g_hCmdMenu.SetTitle(cTitle);
 		
 		for (int i=iSize-1; i>=0; --i) //FRESH Otkaz'es will be at first point
 		{
-			hArray = GetArrayCell(g_hData, i);
-			GetArrayString(hArray, NAME, cName, sizeof(cName));
+			hArray = g_hData.Get(i);
+			hArray.GetString(NAME, cName, sizeof(cName));
 			FormatEx(cTitle, sizeof(cTitle), "%s", cName);
 			
 			IntToString(i, cIndex, sizeof(cIndex));
@@ -426,13 +422,13 @@ void CmdOtkazDetailMenu(int client)
 	int iTime;
 	char cTime[256];
 	char cLangText[256];
-	Handle hArray;
+	ArrayList hArray;
 	
 	
-	hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
-	GetArrayString(hArray, NAME, cName, sizeof(cName));
-	GetArrayString(hArray, REASON, cReason, sizeof(cReason));
-	iTime = GetArrayCell(hArray, TIME);
+	hArray = g_hData.Get(g_iTarget[client][INDEX]);
+	hArray.GetString(NAME, cName, sizeof(cName));
+	hArray.GetString(REASON, cReason, sizeof(cReason));
+	iTime = hArray.Get(TIME);
 	
 	Menu hMenu = new Menu(MenuHandler_CmdOtkazDetailMenu);
 	
@@ -481,9 +477,9 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 			}
 			else
 			{
-				Handle hArray;
-				hArray = GetArrayCell(g_hData, g_iTarget[client][INDEX]);
-				int iTarget = GetArrayCell(hArray, ID);
+				ArrayList hArray;
+				hArray = g_hData.Get(g_iTarget[client][INDEX]);
+				int iTarget = hArray.Get(ID);
 				
 				PrintToChatAll("%s%t", PREFIX, "Notify Otkaz Finished", client, iTarget);
 				
@@ -492,7 +488,7 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 				SetEntityRenderColor(iTarget, 255, 255, 255, 255);
 				
 				g_bBlockotkaz[iTarget] = false;
-				int iIndex = FindValueInArray(hArray, iTarget);
+				int iIndex = hArray.FindValue(iTarget);
 				if (iIndex != -1)
 				{
 					#if DEBUG
@@ -516,19 +512,17 @@ public void OnClientDisconnect(int client)
 stock bool RemoveClientFromMenu(int client)
 {
 	if (client == 0 && GetClientTeam(client) != 2) return false;
-	int iSize = GetArraySize(g_hData);
+	int iSize = g_hData.Length;
 	if (iSize == 0) return false;
-	Handle hArray;
+	ArrayList hArray;
 	int iIndex;
 	for (int i=iSize-1; i>=0; --i)
 	{
-		hArray = GetArrayCell(g_hData, i);
-		if (GetArrayCell(hArray, ID) == client)
+		hArray = g_hData.Get(i);
+		if (hArray.Get(ID) == client)
 		{
-			// Find client ID from g_hData Simple using, Thanks R1KO for this.
-			// iIndex = GetArrayCell(hArray, ID);
-			// PrintToChatAll("iIndex = %i", iIndex);
-			iIndex = FindValueInArray(hArray, client);
+			// Find client ID from g_hData Simple using, Thanks R1KO for this.);
+			iIndex = hArray.FindValue(client);
 			Otkaz_RemoveFromArray(iIndex);
 			
 			//From wiki it's CloseHandle(hArray);
@@ -552,10 +546,10 @@ stock void CreateCustomCfg(const char[] Path)
 
 void Otkaz_RemoveFromArray(int iIndex)
 {
-	RemoveFromArray(g_hData, iIndex);
+	g_hData.Erase(iIndex);
 }
 
 void Clear_OtkazHistory()
 {
-	ClearArray(g_hData);
+	g_hData.Clear();
 }
