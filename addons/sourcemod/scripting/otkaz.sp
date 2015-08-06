@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 #undef REQUIRE_PLUGIN
+#include <updater>
 #tryinclude <jail_control>
 #tryinclude <tf2jail>
 #tryinclude <warden>
@@ -9,10 +10,11 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.4"
+#define PLUGIN_VERSION "1.3.5"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
+#define UPDATE_URL "https://updater.tibari.ru/otkaz/updatefile.txt"
 
 ConVar g_hEnabled;
 ConVar g_hRoundUse;
@@ -106,6 +108,9 @@ public void OnPluginStart()
 	LoadTranslations("otkaz.phrases");
 	
 	OtkazMenuInitialized();
+	
+	if (LibraryExists("updater"))
+		Updater_AddPlugin(UPDATE_URL);
 }
 
 public void OnConfigsExecuted()
@@ -152,6 +157,15 @@ public void OnLibraryAdded(const char[] name)
 	g_bWarden = StrEqual(name, "warden");
 	g_bJailControl = StrEqual(name, "jail_control");
 	g_bTF2Jail = StrEqual(name, "tf2jail");
+	
+	if (StrEqual(name, "updater"))
+		Updater_AddPlugin(UPDATE_URL);
+}
+
+public int Updater_OnPluginUpdated()
+{
+	LogMessage("Plugin updated. Old version %s. Now reloading...");
+	ReloadPlugin();
 }
 
 public void OnLibraryRemoved(const char[] name)
