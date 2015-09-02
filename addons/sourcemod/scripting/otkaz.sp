@@ -10,7 +10,7 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.5"
+#define PLUGIN_VERSION "1.3.6"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -39,18 +39,11 @@ int g_iRoundUsed[MAXPLAYERS+1];
 int g_iMenuTime;
 int g_iNumCmds;
 
+int g_iGlobTime;
+
 char Reasons[26] = "configs/otkaz_reasons.txt";
 char g_cChatCmds[16][32];
 char g_cColor[3][4];
-
-enum
-{
-	ID = 0,
-	NAME,
-	REASON,
-	TIME,
-	SIZE
-}
 
 enum Target
 {
@@ -59,7 +52,7 @@ enum Target
 
 int g_iTarget[MAXPLAYERS+1][Target];
 
-ArrayList g_hData;
+ArrayList g_aClients, g_aNames, g_aReasons, g_aTimes;
 
 public Plugin myinfo =
 {
@@ -86,7 +79,10 @@ public void OnPluginStart()
 	g_hMenuTime.AddChangeHook(OnCvarChange);
 	g_hChatCommands.AddChangeHook(OnCvarChange);
 	
-	g_hData = new ArrayList(64);
+	g_aClients = new ArrayList(MaxClients+1);
+	g_aNames = new ArrayList(MAX_NAME_LENGTH);
+	g_aReasons = new ArrayList(85);
+	g_aTimes = new ArrayList(48);
 	
 	AutoExecConfig(true, "otkaz");
 	
@@ -185,6 +181,7 @@ public void OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
 		g_bBlockotkaz[i] = false;
 		//If exists then
 		Clear_OtkazHistory();
+		g_iGlobTime = GetTime();
 	}
 }
 
@@ -208,9 +205,6 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		{
 			if (StrEqual(sArgs, g_cChatCmds[i], true)) // If !Otkaz and !otkaz different items we set 3 argument to true
 			{
-				#if DEBUG
-					PrintToChatAll("g_cChatCmds[i] = %s", g_cChatCmds[i]);
-				#endif
 				if(GetClientTeam(client) == 2)
 				{
 					if(IsPlayerAlive(client))
@@ -289,10 +283,8 @@ void OtkazMenuInitialized()
 {
 	Handle oprfile = OpenFile("addons/sourcemod/configs/otkaz_reasons.txt", "r");
 	if (oprfile == null)
-	{
-		PrintToServer("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.txt");
-		return;
-	}
+		SetFailState("Не удалось открыть файл addons/sourcemod/configs/otkaz_reasons.txt");
+	
 	g_hMenu = new Menu(OtkazMenuHandler);
 	char StR[MAX_REASON_SIZE];
 	char cLangTitle[512];
@@ -302,7 +294,7 @@ void OtkazMenuInitialized()
 	{
 		g_hMenu.AddItem(StR, StR);
 	}
-	CloseHandle(oprfile);
+	delete oprfile;
 	g_hMenu.ExitButton = true;
 }
 
@@ -347,24 +339,20 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 			OtkazStatusPanel.DrawItem(cFullReason);
 			
 			//Get current time and put in char
-			FormatTime(cTime, sizeof(cTime), "%H:%M:%S", GetTime());
+			int temptime = GetTime() - g_iGlobTime;
+			FormatTime(cTime, sizeof(cTime), "%M:%S", temptime);
 			
 			//Get Full String and put in char
 			FormatEx(cTimebuff, sizeof(cTimebuff), "%t", "Reason Time", cTime);
 			OtkazStatusPanel.DrawText(cTimebuff);
 			OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, 5);
 			
-			//LOCAL Array to work with this
-			ArrayList hArray;
-			hArray = new ArrayList(125, SIZE);
-			
 			//At First
 			GetClientName(client, cName, sizeof(cName));
-			hArray.Set(ID, client); //Save client ID for some reason
-			hArray.SetString(NAME, cName);
-			hArray.SetString(REASON, cReason);
-			hArray.Set(TIME, GetTime());
-			g_hData.Push(hArray);
+			g_aClients.Push(client);
+			g_aNames.PushString(cName);
+			g_aReasons.PushString(cReason);
+			g_aTimes.Push(temptime);
 		}
 		case MenuAction_End: return;
 	}
@@ -382,31 +370,30 @@ public int OtkazStatusPanel_Handler(Menu panel, MenuAction action, int client, i
 
 void CmdOtkazMenu(int client)
 {
-	int iSize = GetArraySize(g_hData);
+	int iSize = g_aClients.Length;
 	#if DEBUG
 		PrintToChatAll("iSize = %i", iSize);
 	#endif
-	if (iSize == 0)
+	if (!iSize)
 		PrintToChat(client, "%s%t", PREFIX, "No Players");
 	else
 	{
 		g_hCmdMenu = new Menu(MenuHandler_CmdOtkazMenu);
-		char cTitle[128];
+		// char cTitle[128];
 		char cName[MAX_NAME_LENGTH];
 		char cIndex[5];
-		ArrayList hArray;
+		// ArrayList hArray;
 		
-		FormatEx(cTitle, sizeof(cTitle), "%t", "Active Otkazes");
-		g_hCmdMenu.SetTitle(cTitle);
+		FormatEx(cName, sizeof(cName), "%t", "Active Otkazes");
+		g_hCmdMenu.SetTitle(cName);
 		
 		for (int i=iSize-1; i>=0; --i) //FRESH Otkaz'es will be at first point
 		{
-			hArray = g_hData.Get(i);
-			hArray.GetString(NAME, cName, sizeof(cName));
-			FormatEx(cTitle, sizeof(cTitle), "%s", cName);
+			g_aNames.GetString(i, cName, sizeof(cName));
+			// FormatEx(cTitle, sizeof(cTitle), "%s", cName);
 			
 			IntToString(i, cIndex, sizeof(cIndex));
-			g_hCmdMenu.AddItem(cIndex, cTitle);
+			g_hCmdMenu.AddItem(cIndex, cName);
 		}
 		
 		g_hCmdMenu.Display(client, MENU_TIME_FOREVER);
@@ -434,15 +421,14 @@ void CmdOtkazDetailMenu(int client)
 	char cName[MAX_NAME_LENGTH];
 	char cReason[MAX_REASON_SIZE];
 	int iTime;
-	char cTime[256];
+	char cTime[48];
 	char cLangText[256];
-	ArrayList hArray;
+	// ArrayList hArray;
 	
 	
-	hArray = g_hData.Get(g_iTarget[client][INDEX]);
-	hArray.GetString(NAME, cName, sizeof(cName));
-	hArray.GetString(REASON, cReason, sizeof(cReason));
-	iTime = hArray.Get(TIME);
+	g_aNames.GetString(g_iTarget[client][INDEX], cName, sizeof(cName));
+	g_aReasons.GetString(g_iTarget[client][INDEX], cReason, sizeof(cReason));
+	iTime = g_aTimes.Get(g_iTarget[client][INDEX]);
 	
 	Menu hMenu = new Menu(MenuHandler_CmdOtkazDetailMenu);
 	
@@ -462,13 +448,6 @@ void CmdOtkazDetailMenu(int client)
 	FormatEx(cLangText, sizeof(cLangText), "%t", "Finish Otkaz");
 	hMenu.AddItem("Finish", cLangText);
 	
-	#if DEBUG
-		int targetid = GetArrayCell(hArray, ID);
-		PrintToChatAll("Массив 0: %i", targetid);
-		PrintToChatAll("Массив 1: %s", cName);
-		PrintToChatAll("Массив 2: %s", cReason);
-		PrintToChatAll("Массив 3: %i", iTime);
-	#endif
 	hMenu.ExitBackButton = true;
 	hMenu.Display(client, MENU_TIME_FOREVER);
 }
@@ -485,15 +464,12 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 		}
 		case MenuAction_Select:
 		{
-			if (iSlot < 3)
-			{
-				CmdOtkazDetailMenu(client);
-			}
+			if (iSlot < 3) CmdOtkazDetailMenu(client);
 			else
 			{
-				ArrayList hArray;
-				hArray = g_hData.Get(g_iTarget[client][INDEX]);
-				int iTarget = hArray.Get(ID);
+				// ArrayList hArray;
+				// hArray = g_hData.Get(g_iTarget[client][INDEX]);
+				int iTarget = g_aClients.Get(g_iTarget[client][INDEX]);
 				
 				PrintToChatAll("%s%t", PREFIX, "Notify Otkaz Finished", client, iTarget);
 				
@@ -502,16 +478,17 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 				SetEntityRenderColor(iTarget, 255, 255, 255, 255);
 				
 				g_bBlockotkaz[iTarget] = false;
-				int iIndex = hArray.FindValue(iTarget);
-				if (iIndex != -1)
-				{
-					#if DEBUG
-						PrintToChatAll("iTarget = %i", iTarget);
-						PrintToChatAll("iIndex = %i", iIndex);
-					#endif
-					Otkaz_RemoveFromArray(iIndex);
-				}
-				CloseHandle(hArray);
+				// int iIndex = hArray.FindValue(iTarget);
+				// if (iIndex != -1)
+				// {
+					// #if DEBUG
+						// PrintToChatAll("iTarget = %i", iTarget);
+						// PrintToChatAll("iIndex = %i", iIndex);
+					// #endif
+					// Otkaz_RemoveFromArray(iIndex);
+				// }
+				// CloseHandle(hArray);
+				Otkaz_RemoveFromArray(g_iTarget[client][INDEX]);
 				CmdOtkazMenu(client);
 			}
 		}
@@ -525,7 +502,7 @@ public void OnClientDisconnect(int client)
 
 stock bool RemoveClientFromMenu(int client)
 {
-	if (client == 0 && GetClientTeam(client) != 2) return false;
+	/* if (client == 0 && GetClientTeam(client) != 2) return false;
 	int iSize = g_hData.Length;
 	if (iSize == 0) return false;
 	ArrayList hArray;
@@ -533,19 +510,35 @@ stock bool RemoveClientFromMenu(int client)
 	for (int i=iSize-1; i>=0; --i)
 	{
 		hArray = g_hData.Get(i);
-		if (hArray.Get(ID) == client)
+		int id = hArray.Get(ID);
+		if (id == client)
 		{
 			// Find client ID from g_hData Simple using, Thanks R1KO for this.);
-			iIndex = hArray.FindValue(client);
+			iIndex = hArray.FindValue(id);
 			Otkaz_RemoveFromArray(iIndex);
 			
 			//From wiki it's CloseHandle(hArray);
-			delete hArray;
+			hArray.Close();
 
 			return true;
 		}
 	}
-	return false;
+	delete hArray;
+	return false; */
+	if (!client || IsFakeClient(client) || !IsClientInGame(client) || !g_aClients.Length) return false;
+	else
+	{
+		int index = g_aClients.FindValue(client);
+		if (index != -1)
+		{
+			g_aClients.Erase(index);
+			g_aNames.Erase(index);
+			g_aReasons.Erase(index);
+			g_aTimes.Erase(index);
+			return true;
+		}
+		return false;
+	}
 }
 
 stock void CreateCustomCfg(const char[] Path)
@@ -558,12 +551,21 @@ stock void CreateCustomCfg(const char[] Path)
 	}
 }
 
-void Otkaz_RemoveFromArray(int iIndex)
+void Otkaz_RemoveFromArray(int index)
 {
-	g_hData.Erase(iIndex);
+	if (index != -1)
+	{
+		g_aClients.Erase(index);
+		g_aNames.Erase(index);
+		g_aReasons.Erase(index);
+		g_aTimes.Erase(index);
+	}
 }
 
 void Clear_OtkazHistory()
 {
-	g_hData.Clear();
+	g_aClients.Clear();
+	g_aNames.Clear();
+	g_aReasons.Clear();
+	g_aTimes.Clear();
 }
