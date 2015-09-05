@@ -14,7 +14,7 @@
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
-#define UPDATE_URL "https://updater.tibari.ru/otkaz/updatefile.txt"
+#define UPDATE_URL "http://updater.tibari.ru/otkaz/updatefile.txt"
 
 ConVar g_hEnabled;
 ConVar g_hRoundUse;
@@ -379,10 +379,8 @@ void CmdOtkazMenu(int client)
 	else
 	{
 		g_hCmdMenu = new Menu(MenuHandler_CmdOtkazMenu);
-		// char cTitle[128];
 		char cName[MAX_NAME_LENGTH];
 		char cIndex[5];
-		// ArrayList hArray;
 		
 		FormatEx(cName, sizeof(cName), "%t", "Active Otkazes");
 		g_hCmdMenu.SetTitle(cName);
@@ -390,7 +388,6 @@ void CmdOtkazMenu(int client)
 		for (int i=iSize-1; i>=0; --i) //FRESH Otkaz'es will be at first point
 		{
 			g_aNames.GetString(i, cName, sizeof(cName));
-			// FormatEx(cTitle, sizeof(cTitle), "%s", cName);
 			
 			IntToString(i, cIndex, sizeof(cIndex));
 			g_hCmdMenu.AddItem(cIndex, cName);
@@ -423,7 +420,6 @@ void CmdOtkazDetailMenu(int client)
 	int iTime;
 	char cTime[48];
 	char cLangText[256];
-	// ArrayList hArray;
 	
 	
 	g_aNames.GetString(g_iTarget[client][INDEX], cName, sizeof(cName));
@@ -467,8 +463,6 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 			if (iSlot < 3) CmdOtkazDetailMenu(client);
 			else
 			{
-				// ArrayList hArray;
-				// hArray = g_hData.Get(g_iTarget[client][INDEX]);
 				int iTarget = g_aClients.Get(g_iTarget[client][INDEX]);
 				
 				PrintToChatAll("%s%t", PREFIX, "Notify Otkaz Finished", client, iTarget);
@@ -478,16 +472,6 @@ public int MenuHandler_CmdOtkazDetailMenu(Menu menu, MenuAction action, int clie
 				SetEntityRenderColor(iTarget, 255, 255, 255, 255);
 				
 				g_bBlockotkaz[iTarget] = false;
-				// int iIndex = hArray.FindValue(iTarget);
-				// if (iIndex != -1)
-				// {
-					// #if DEBUG
-						// PrintToChatAll("iTarget = %i", iTarget);
-						// PrintToChatAll("iIndex = %i", iIndex);
-					// #endif
-					// Otkaz_RemoveFromArray(iIndex);
-				// }
-				// CloseHandle(hArray);
 				Otkaz_RemoveFromArray(g_iTarget[client][INDEX]);
 				CmdOtkazMenu(client);
 			}
@@ -502,29 +486,6 @@ public void OnClientDisconnect(int client)
 
 stock bool RemoveClientFromMenu(int client)
 {
-	/* if (client == 0 && GetClientTeam(client) != 2) return false;
-	int iSize = g_hData.Length;
-	if (iSize == 0) return false;
-	ArrayList hArray;
-	int iIndex;
-	for (int i=iSize-1; i>=0; --i)
-	{
-		hArray = g_hData.Get(i);
-		int id = hArray.Get(ID);
-		if (id == client)
-		{
-			// Find client ID from g_hData Simple using, Thanks R1KO for this.);
-			iIndex = hArray.FindValue(id);
-			Otkaz_RemoveFromArray(iIndex);
-			
-			//From wiki it's CloseHandle(hArray);
-			hArray.Close();
-
-			return true;
-		}
-	}
-	delete hArray;
-	return false; */
 	if (!client || IsFakeClient(client) || !IsClientInGame(client) || !g_aClients.Length) return false;
 	else
 	{
