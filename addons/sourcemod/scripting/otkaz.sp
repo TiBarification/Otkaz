@@ -5,12 +5,13 @@
 #tryinclude <jail_control>
 #tryinclude <tf2jail>
 #tryinclude <warden>
+#tryinclude <jwp>
 
 #pragma semicolon 1
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.6"
+#define PLUGIN_VERSION "1.3.7"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -30,9 +31,7 @@ bool g_bEnabled;
 bool g_bBlockotkaz[MAXPLAYERS+1] = false;
 
 //PLUGINS BOOL's
-bool g_bWarden;
-bool g_bJailControl;
-bool g_bTF2Jail;
+bool g_bWarden, g_bJailControl, g_bTF2Jail, g_bWardenPro;
 
 int g_iRoundUse;
 int g_iRoundUsed[MAXPLAYERS+1];
@@ -91,13 +90,11 @@ public void OnPluginStart()
 	else if (GetEngineVersion() == Engine_TF2)
 		HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	
-	HookEvent("player_death", OnPlayerDeath);
-	
 	g_bEnabled = true;
 	
 	RegConsoleCmd("sm_wotkaz", Command_OtkazView, "View otkaz menu");
 	
-	PrintToServer("Engine Version : %s |Plugin Version: %s", GetEngineVersion(), PLUGIN_VERSION);
+	PrintToServer("Engine Version : %d |Plugin Version: %s", GetEngineVersion(), PLUGIN_VERSION);
 	
 	CreateCustomCfg(Reasons);
 	
@@ -121,23 +118,20 @@ public void OnConfigsExecuted()
 	g_iNumCmds = ExplodeString(cBuffer, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
-public void OnCvarChange(ConVar hConVar, const char[] sOldValue, const char[] sNewValue)
+public void OnCvarChange(ConVar cvar, const char[] sOldValue, const char[] sNewValue)
 {
-	char sConVarName[64];
-	hConVar.GetName(sConVarName, sizeof(sConVarName));
-	
-	if (StrEqual("sm_otkaz_enabled", sConVarName))
+	if (cvar == g_hEnabled)
 	{
-		if (g_bEnabled != hConVar.BoolValue)
-			g_bEnabled = hConVar.BoolValue;
+		if (g_bEnabled != cvar.BoolValue)
+			g_bEnabled = cvar.BoolValue;
 	}
-	else if (StrEqual("sm_otkaz_per_round", sConVarName))
+	else if (cvar == g_hRoundUse)
 		g_iRoundUse = StringToInt(sNewValue);
-	else if (StrEqual("sm_otkaz_player_color", sConVarName))
+	else if (cvar == g_hColor)
 		ExplodeString(sNewValue, " ", g_cColor, sizeof(g_cColor), sizeof(g_cColor[]));
-	else if (StrEqual("sm_otkaz_menu_time", sConVarName))
+	else if (cvar == g_hMenuTime)
 		g_iMenuTime = StringToInt(sNewValue);
-	else if (StrEqual("sm_otkaz_cmds", sConVarName))
+	else if (cvar == g_hChatCommands)
 		ExplodeString(sNewValue, ",", g_cChatCmds, sizeof(g_cChatCmds), sizeof(g_cChatCmds[]));
 }
 
@@ -146,6 +140,7 @@ public void OnAllPluginsLoaded()
 	g_bWarden = LibraryExists("warden");
 	g_bJailControl = LibraryExists("jail_control");
 	g_bTF2Jail = LibraryExists("tf2jail");
+	g_bWardenPro = LibraryExists("jwp");
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -153,6 +148,7 @@ public void OnLibraryAdded(const char[] name)
 	g_bWarden = StrEqual(name, "warden");
 	g_bJailControl = StrEqual(name, "jail_control");
 	g_bTF2Jail = StrEqual(name, "tf2jail");
+	g_bWardenPro = StrEqual(name, "jwp");
 	
 	if (StrEqual(name, "updater"))
 		Updater_AddPlugin(UPDATE_URL);
@@ -169,6 +165,7 @@ public void OnLibraryRemoved(const char[] name)
 	g_bWarden = StrEqual(name, "warden");
 	g_bJailControl = StrEqual(name, "jail_control");
 	g_bTF2Jail = StrEqual(name, "tf2jail");
+	g_bWardenPro = StrEqual(name, "jwp");
 }
 
 public void OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
@@ -260,6 +257,8 @@ public Action Command_OtkazView(int client, int args)
 				CmdOtkazMenu(client);
 			#else
 			if (g_bWarden && warden_iswarden(client))
+				CmdOtkazMenu(client);
+			else if (g_bWardenPro && JWP_IsWarden(client))
 				CmdOtkazMenu(client);
 			else if (g_bJailControl && Jail_IsClientCommander(client))
 				CmdOtkazMenu(client);
