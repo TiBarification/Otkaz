@@ -86,4 +86,9 @@
 		"en"	"{1} watched otkaz by {2}."
 		"ru"	"{1} рассмотрел отказ зека {2}."
 	}
+	"Otkaz Commands Error"
+	{
+		"en"	"Otkaz commands error, contact with administrator"
+		"ru"	"Команды отказа не установлены, обратитесь к администратору"
+	}
 }
