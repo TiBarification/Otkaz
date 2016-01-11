@@ -2,16 +2,16 @@
 #include <sdktools>
 #undef REQUIRE_PLUGIN
 #include <updater>
-#tryinclude <jail_control>
-#tryinclude <tf2jail>
-#tryinclude <warden>
-#tryinclude <jwp>
+#tryinclude <jail_control> // INC FILES: http://goo.gl/rpxYc2
+#tryinclude <tf2jail> // https://goo.gl/NR2JUk
+#tryinclude <warden> // https://goo.gl/EVQ4Pi
+#tryinclude <jwp> // https://goo.gl/UR6Up2
 
 #pragma semicolon 1
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.8"
+#define PLUGIN_VERSION "1.3.8-a"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -27,7 +27,7 @@ bool g_bEnabled;
 bool g_bBlockotkaz[MAXPLAYERS+1] = false;
 
 //PLUGINS BOOL's
-bool g_bWarden, g_bJailControl, g_bTF2Jail, g_bWardenPro;
+bool g_bWardenPlugin[4];
 
 int g_iRoundUse;
 int g_iRoundUsed[MAXPLAYERS+1];
@@ -113,20 +113,29 @@ public void OnCvarChange(ConVar cvar, const char[] oldValue, const char[] newVal
 	}
 }
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	MarkNativeAsOptional("warden_iswarden");
+	MarkNativeAsOptional("JWP_IsWarden");
+	MarkNativeAsOptional("Jail_IsClientCommander");
+	MarkNativeAsOptional("TF2Jail_IsWarden");
+	return APLRes_Success;
+}
+
 public void OnAllPluginsLoaded()
 {
-	g_bWarden = LibraryExists("warden");
-	g_bJailControl = LibraryExists("jail_control");
-	g_bTF2Jail = LibraryExists("tf2jail");
-	g_bWardenPro = LibraryExists("jwp");
+	g_bWardenPlugin[0] = LibraryExists("warden");
+	g_bWardenPlugin[1] = LibraryExists("jail_control");
+	g_bWardenPlugin[2] = LibraryExists("tf2jail");
+	g_bWardenPlugin[3] = LibraryExists("jwp");
 }
 
 public void OnLibraryAdded(const char[] name)
 {
-	g_bWarden = StrEqual(name, "warden");
-	g_bJailControl = StrEqual(name, "jail_control");
-	g_bTF2Jail = StrEqual(name, "tf2jail");
-	g_bWardenPro = StrEqual(name, "jwp");
+	g_bWardenPlugin[0] = StrEqual(name, "warden");
+	g_bWardenPlugin[1] = StrEqual(name, "jail_control");
+	g_bWardenPlugin[2] = StrEqual(name, "tf2jail");
+	g_bWardenPlugin[3] = StrEqual(name, "jwp");
 	
 	if (StrEqual(name, "updater"))
 		Updater_AddPlugin(UPDATE_URL);
@@ -140,10 +149,10 @@ public int Updater_OnPluginUpdated()
 
 public void OnLibraryRemoved(const char[] name)
 {
-	g_bWarden = StrEqual(name, "warden");
-	g_bJailControl = StrEqual(name, "jail_control");
-	g_bTF2Jail = StrEqual(name, "tf2jail");
-	g_bWardenPro = StrEqual(name, "jwp");
+	g_bWardenPlugin[0] = StrEqual(name, "warden");
+	g_bWardenPlugin[1] = StrEqual(name, "jail_control");
+	g_bWardenPlugin[2] = StrEqual(name, "tf2jail");
+	g_bWardenPlugin[3] = StrEqual(name, "jwp");
 }
 
 public void OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
@@ -223,20 +232,20 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 
 public Action Command_OtkazView(int client, int args)
 {
-	if (!IsFakeClient(client) && IsClientInGame(client) && g_bEnabled)
+	if (g_bEnabled && client && !IsFakeClient(client) && IsClientInGame(client))
 	{
 		if (!g_iNumCmds) PrintToChat(client, "%s%t", PREFIX, "Otkaz Commands Error");
 		else if (GetEngineVersion() == Engine_CSS || GetEngineVersion() == Engine_CSGO)
 		{
 			#if DEBUG
-				PrintToChatAll("g_bJailControl = %i, g_bWarden = %i, g_bTF2Jail = %i", g_bJailControl, g_bWarden, g_bTF2Jail);
+				PrintToChatAll("Jail Control = %i, Warden = %i, Jail Warden Pro = %i, g_bTF2Jail = %i", g_bWardenPlugin[1], g_bWardenPlugin[0], g_bWardenPlugin[3], g_bWardenPlugin[2]);
 				CmdOtkazMenu(client);
 			#else
-			if (g_bWarden && warden_iswarden(client))
+			if (g_bWardenPlugin[0] && warden_iswarden(client))
 				CmdOtkazMenu(client);
-			else if (g_bWardenPro && JWP_IsWarden(client))
+			else if (g_bWardenPlugin[3] && JWP_IsWarden(client))
 				CmdOtkazMenu(client);
-			else if (g_bJailControl && Jail_IsClientCommander(client))
+			else if (g_bWardenPlugin[1] && Jail_IsClientCommander(client))
 				CmdOtkazMenu(client);
 			else
 				PrintToChat(client, "%s%t", PREFIX, "Only Warden");
@@ -244,7 +253,7 @@ public Action Command_OtkazView(int client, int args)
 		}
 		else if (GetEngineVersion() == Engine_TF2)
 		{
-			if (g_bTF2Jail && TF2Jail_IsWarden(client))
+			if (g_bWardenPlugin[2] && TF2Jail_IsWarden(client))
 				CmdOtkazMenu(client);
 			else
 				PrintToChat(client, "%s%t", PREFIX, "Only Warden");
