@@ -11,7 +11,7 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.3.8-a"
+#define PLUGIN_VERSION "1.3.9"
 #define PREFIX "\x01[\x03Отказ\x01]\x03 "
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
@@ -25,6 +25,8 @@ Panel OtkazStatusPanel;
 
 bool g_bEnabled;
 bool g_bBlockotkaz[MAXPLAYERS+1] = false;
+bool g_bEnableOwnReason;
+bool g_bChatWait[MAXPLAYERS+1] = false;
 
 //PLUGINS BOOL's
 bool g_bWardenPlugin[4];
@@ -90,9 +92,9 @@ public void OnPluginStart()
 	
 	PrintToServer("Engine Version : %d |Plugin Version: %s", GetEngineVersion(), PLUGIN_VERSION);
 	
-	CreateCustomCfg(ConfigPath);
-	
 	LoadTranslations("otkaz.phrases");
+	
+	CreateCustomCfg(ConfigPath);
 	
 	
 	if (LibraryExists("updater"))
@@ -149,10 +151,10 @@ public int Updater_OnPluginUpdated()
 
 public void OnLibraryRemoved(const char[] name)
 {
-	g_bWardenPlugin[0] = StrEqual(name, "warden");
-	g_bWardenPlugin[1] = StrEqual(name, "jail_control");
-	g_bWardenPlugin[2] = StrEqual(name, "tf2jail");
-	g_bWardenPlugin[3] = StrEqual(name, "jwp");
+	g_bWardenPlugin[0] = !StrEqual(name, "warden");
+	g_bWardenPlugin[1] = !StrEqual(name, "jail_control");
+	g_bWardenPlugin[2] = !StrEqual(name, "tf2jail");
+	g_bWardenPlugin[3] = !StrEqual(name, "jwp");
 }
 
 public void OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
@@ -188,39 +190,54 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 		if (!g_iNumCmds) PrintToChat(client, "%s%t", PREFIX, "Otkaz Commands Error");
 		else
 		{
-			for (int i = 0; i < g_iNumCmds; i++)
+			if (g_bChatWait[client])
 			{
-				if (StrEqual(sArgs, g_cChatCmds[i], true)) // If !Otkaz and !otkaz different items we set 3 argument to true
+				if (GetClientTeam(client) == 2 && IsPlayerAlive(client))
 				{
-					if(GetClientTeam(client) == 2)
+					char cReason[85];
+					strcopy(cReason, sizeof(cReason), sArgs);
+					StripQuotes(cReason);
+					TrimString(cReason);
+					ProceedOtkaz(client, cReason);
+				}
+				g_bChatWait[client] = false;
+			}
+			else
+			{
+				for (int i = 0; i < g_iNumCmds; i++)
+				{
+					if (StrEqual(sArgs, g_cChatCmds[i], true)) // If !Otkaz and !otkaz different items we set 3 argument to true
 					{
-						if(IsPlayerAlive(client))
+						if(GetClientTeam(client) == 2)
 						{
-							if (g_bBlockotkaz[client])
+							if(IsPlayerAlive(client))
 							{
-								OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, MENU_TIME_FOREVER);
-								return Plugin_Stop;
+								if (g_bBlockotkaz[client])
+								{
+									OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, MENU_TIME_FOREVER);
+									return Plugin_Stop;
+								}
+								else if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
+								{
+									PrintToChat(client, "%s%t", PREFIX, "Round Use", g_iRoundUse);
+									return Plugin_Stop;
+								}
+								else if (!g_iMenuTime)
+									g_hMenu.Display(client, MENU_TIME_FOREVER);
+								else
+									g_hMenu.Display(client, g_iMenuTime);
 							}
-							else if (g_iRoundUse && g_iRoundUsed[client] >= g_iRoundUse)
-							{
-								PrintToChat(client, "%s%t", PREFIX, "Round Use", g_iRoundUse);
-								return Plugin_Stop;
-							}
-							else if (!g_iMenuTime)
-								g_hMenu.Display(client, MENU_TIME_FOREVER);
 							else
-								g_hMenu.Display(client, g_iMenuTime);
+							{
+								PrintToChat(client, "%s%t", PREFIX, "Must be Alive");
+								return Plugin_Stop;
+							}
 						}
 						else
 						{
-							PrintToChat(client, "%s%t", PREFIX, "Must be Alive");
+							PrintToChat(client, "%s%t", PREFIX, "Only Prisoner");
 							return Plugin_Stop;
 						}
-					}
-					else
-					{
-						PrintToChat(client, "%s%t", PREFIX, "Only Prisoner");
-						return Plugin_Stop;
 					}
 				}
 			}
@@ -278,48 +295,17 @@ public int OtkazMenuHandler(Menu menu, MenuAction action, int client, int iSlot)
 					SetEntityRenderColor(client, StringToInt(g_cColor[0]), StringToInt(g_cColor[1]), StringToInt(g_cColor[2]), StringToInt(g_cColor[3]));
 				}
 				char cReason[85];
-				char cFullReason[256];
-				char cTime[48];
-				char cTimebuff[128];
-				char cName[MAX_NAME_LENGTH];
 				
 				menu.GetItem(iSlot, cReason, sizeof(cReason));
-				char cChatNotify[1024];
-				FormatEx(cChatNotify, sizeof(cChatNotify), "%t", "Chat Notify", client, cReason);
-				PrintToChatAll("%s\x04%s", PREFIX, cChatNotify);
 				
-				//Block otkaz for those who wanna flood
-				g_bBlockotkaz[client] = true;
+				if (g_bEnableOwnReason && !strcmp(cReason, "own"))
+				{
+					g_bChatWait[client] = true;
+					PrintToChat(client, "%s\x03Введите причину отказа в чат!", PREFIX);
+					return;
+				}
 				
-				//As request we're adding waiting Menu
-				OtkazStatusPanel = new Panel();
-				char cLangText[86];
-				FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status");
-				OtkazStatusPanel.SetTitle(cLangText);
-				FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text1");
-				OtkazStatusPanel.DrawText(cLangText);
-				FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text2");
-				OtkazStatusPanel.DrawText(cLangText);
-				
-				
-				FormatEx(cFullReason, sizeof(cFullReason), "%t", "Reason", cReason);
-				OtkazStatusPanel.DrawItem(cFullReason);
-				
-				//Get current time and put in char
-				int temptime = GetTime() - g_iGlobTime;
-				FormatTime(cTime, sizeof(cTime), "%M:%S", temptime);
-				
-				//Get Full String and put in char
-				FormatEx(cTimebuff, sizeof(cTimebuff), "%t", "Reason Time", cTime);
-				OtkazStatusPanel.DrawText(cTimebuff);
-				OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, 5);
-				
-				//At First
-				GetClientName(client, cName, sizeof(cName));
-				g_aClients.Push(client);
-				g_aNames.PushString(cName);
-				g_aReasons.PushString(cReason);
-				g_aTimes.Push(temptime);
+				ProceedOtkaz(client, cReason);
 			}
 		}
 	}
@@ -514,9 +500,9 @@ public SMCResult Config_NewSection(SMCParser smc, const char[] name, bool opt_qu
 		{
 			ConfigState = ConfigStateReasons;
 			g_hMenu = new Menu(OtkazMenuHandler);
-			// char cLangTitle[52];
-			// FormatEx(cLangTitle, sizeof(cLangTitle), "%t", "Reason Select");
-			g_hMenu.SetTitle("Выберите причину отказа:");
+			char cLangTitle[52];
+			FormatEx(cLangTitle, sizeof(cLangTitle), "%t", "Reason Select");
+			g_hMenu.SetTitle(cLangTitle);
 			g_hMenu.ExitButton = true;
 		}
 	}
@@ -564,6 +550,13 @@ public SMCResult Config_KeyValue(SMCParser smc, const char[] key, const char[] v
 				else
 					g_iNumCmds = 0;
 			}
+			else if (!strcmp("OwnReasons", key, false))
+			{
+				if (value[0])
+					g_bEnableOwnReason = view_as<bool>(StringToInt(value));
+				else
+					g_bEnableOwnReason = false;
+			}
 		}
 		case ConfigStateReasons:
 		{
@@ -575,6 +568,12 @@ public SMCResult Config_KeyValue(SMCParser smc, const char[] key, const char[] v
 
 public SMCResult Config_EndSection(SMCParser smc)
 {
+	if (ConfigState == ConfigStateReasons)
+	{
+		if (g_bEnableOwnReason)
+			g_hMenu.AddItem("own", "Своя причина");
+		ConfigState = ConfigStateNone;
+	}
 	return SMCParse_Continue;
 }
 
@@ -595,4 +594,45 @@ void Clear_OtkazHistory()
 	g_aNames.Clear();
 	g_aReasons.Clear();
 	g_aTimes.Clear();
+}
+
+void ProceedOtkaz(int client, const char[] cReason)
+{
+	char cFullReason[256], cTime[48], cTimebuff[128], cName[MAX_NAME_LENGTH], cChatNotify[1024];
+	
+	FormatEx(cChatNotify, sizeof(cChatNotify), "%t", "Chat Notify", client, cReason);
+	PrintToChatAll("%s\x04%s", PREFIX, cChatNotify);
+	
+	//Block otkaz for those who wanna flood
+	g_bBlockotkaz[client] = true;
+	
+	//As request we're adding waiting Menu
+	OtkazStatusPanel = new Panel();
+	char cLangText[86];
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status");
+	OtkazStatusPanel.SetTitle(cLangText);
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text1");
+	OtkazStatusPanel.DrawText(cLangText);
+	FormatEx(cLangText, sizeof(cLangText), "%t", "Otkaz Status Text2");
+	OtkazStatusPanel.DrawText(cLangText);
+	
+	
+	FormatEx(cFullReason, sizeof(cFullReason), "%t", "Reason", cReason);
+	OtkazStatusPanel.DrawItem(cFullReason);
+	
+	//Get current time and put in char
+	int temptime = GetTime() - g_iGlobTime;
+	FormatTime(cTime, sizeof(cTime), "%M:%S", temptime);
+	
+	//Get Full String and put in char
+	FormatEx(cTimebuff, sizeof(cTimebuff), "%t", "Reason Time", cTime);
+	OtkazStatusPanel.DrawText(cTimebuff);
+	OtkazStatusPanel.Send(client, OtkazStatusPanel_Handler, 5);
+	
+	//At First
+	GetClientName(client, cName, sizeof(cName));
+	g_aClients.Push(client);
+	g_aNames.PushString(cName);
+	g_aReasons.PushString(cReason);
+	g_aTimes.Push(temptime);
 }
