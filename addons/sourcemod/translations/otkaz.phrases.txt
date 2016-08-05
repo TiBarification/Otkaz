@@ -1,5 +1,10 @@
 "Phrases"
 {
+	"Otkaz Prefix"
+	{
+		"en"	"[Otkaz]"
+		"ru"	"[Отказ]"
+	}
 	"Round Use"
 	{
 		"#format"	"{1:i}"
@@ -90,5 +95,17 @@
 	{
 		"en"	"Otkaz commands error, contact with administrator"
 		"ru"	"Команды отказа не установлены, обратитесь к администратору"
+	}
+	
+	"Enter Own Otkaz"
+	{
+		"en"	"Input your own reason in chat"
+		"ru"	"Введите причину отказа в чат"
+	}
+	
+	"Own Reason Menu"
+	{
+		"en"	"Own reason"
+		"ru"	"Своя причина"
 	}
 }
