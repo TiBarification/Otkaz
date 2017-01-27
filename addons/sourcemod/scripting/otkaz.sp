@@ -11,7 +11,7 @@
 //Force 1.7 syntax
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.4.0"
+#define PLUGIN_VERSION "1.4.1"
 #define MAX_REASON_SIZE 85
 #define DEBUG 0
 #define UPDATE_URL "http://updater.tibari.ru/otkaz/updatefile.txt"
@@ -115,6 +115,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 	MarkNativeAsOptional("warden_iswarden");
 	MarkNativeAsOptional("JWP_IsWarden");
+	MarkNativeAsOptional("JWP_ShowMainMenu");
 	MarkNativeAsOptional("Jail_IsClientCommander");
 	MarkNativeAsOptional("TF2Jail_IsWarden");
 	return APLRes_Success;
